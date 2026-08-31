@@ -300,7 +300,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 24),
+            separatorBuilder: (_, _) => const Divider(height: 24),
             itemBuilder: (context, index) {
               final item = items[index];
 
@@ -442,7 +442,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: filters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, index) {
                 final filter = filters[index];
 

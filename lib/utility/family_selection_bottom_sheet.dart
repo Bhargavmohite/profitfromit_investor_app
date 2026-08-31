@@ -38,7 +38,7 @@ class FamilySelectionBottomSheet extends StatelessWidget {
                   ListView.separated(
                     shrinkWrap: true,
                     itemCount: familyProvider.familyList.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final family = familyProvider.familyList[index];
                       final isSelected = familyProvider.isSelected(family);

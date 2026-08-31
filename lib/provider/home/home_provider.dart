@@ -21,7 +21,7 @@ class HomeProvider extends ChangeNotifier {
 
   bool get dashboardLoading => _dashboardLoading;
 
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   bool get isLoading => _isLoading;
 
