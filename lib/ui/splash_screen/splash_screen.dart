@@ -82,19 +82,33 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 
-  Future<void> _navigateUser() async {
+Future<void> _navigateUser() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    String userId = await LocalStorage.getAccessToken();
+
+    final accessToken = await LocalStorage.getAccessToken();
+
+    final userId = await LocalStorage.getId();
 
     await Future.delayed(const Duration(milliseconds: 2500));
 
     if (!mounted) return;
 
-    if (userId.isNotEmpty) {
+    // User is considered logged in only after OTP
+    // verification has successfully stored BOTH values.
+    final isVerifiedLogin = accessToken.isNotEmpty && userId.isNotEmpty;
+
+    if (isVerifiedLogin) {
       await userProvider.loadUserInfo();
-      nextRoute(MaterialPageRoute(builder: (context) => const DashboardScreen()), isClearBackRoutes: true);
+
+      nextRoute(
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        isClearBackRoutes: true,
+      );
     } else {
-      nextRoute(MaterialPageRoute(builder: (context) => const LoginScreen()), isClearBackRoutes: true);
+      nextRoute(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        isClearBackRoutes: true,
+      );
     }
   }
 }

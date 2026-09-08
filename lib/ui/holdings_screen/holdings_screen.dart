@@ -105,12 +105,47 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
             );
           }
 
-          final holdings = provider.holdings;
+final holdings = provider.holdings;
 
-          final filteredHoldings = holdings.where((holding) {
-            final name = (holding.assetName ?? '').toLowerCase();
-            return name.contains(_searchText.toLowerCase());
+          // ==============================================
+          // SEARCH QUERY
+          // ==============================================
+
+          final searchQuery = _searchText.trim().toLowerCase();
+
+          // ==============================================
+          // ACTIVE HOLDINGS
+          //
+          // Only Qty > 0
+          // Used for normal holdings display and count.
+          // ==============================================
+
+          final activeHoldings = holdings.where((holding) {
+            return (holding.netQuantity ?? 0) > 0;
           }).toList();
+
+          // ==============================================
+          // DISPLAY LIST
+          //
+          // No Search:
+          //      Show active holdings only.
+          //
+          // Search:
+          //      Search ALL holdings,
+          //      including qty 0 and negative.
+          // ==============================================
+
+          final List<Holding> filteredHoldings;
+
+          if (searchQuery.isEmpty) {
+            filteredHoldings = List<Holding>.from(activeHoldings);
+          } else {
+            filteredHoldings = holdings.where((holding) {
+              final name = (holding.assetName ?? '').toLowerCase();
+
+              return name.contains(searchQuery);
+            }).toList();
+          }
 
           _applySorting(filteredHoldings);
 
@@ -123,7 +158,7 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total Holdings (${filteredHoldings.length})', style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textSecondary)),
+                    Text('Total Holdings (${activeHoldings.length})', style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textSecondary)),
                     Text(
                       provider.totalInvested,
                       style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: AppColor.textPrimary),

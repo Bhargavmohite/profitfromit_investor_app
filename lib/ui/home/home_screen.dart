@@ -10,6 +10,7 @@ import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/app_images.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/family_selection_bottom_sheet.dart';
+import 'package:profit_from_it_investors/ui/home/widgets/net_contribution_tile.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,6 +23,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+String _getSafeInitial(String? value) {
+    final text = (value ?? '').trim();
+
+    if (text.isEmpty) {
+      return '?';
+    }
+
+    return text[0].toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +47,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         final familyProvider = context.read<FamilyProvider>();
         // await familyProvider.setFamilyList(homeProvider.dashboardData?.familyList ?? []);
-        familyProvider.setFamilyList(homeProvider.dashboardData?.familyList ?? []);
+        familyProvider.setFamilyList(
+          homeProvider.dashboardData?.familyList ?? [],
+        );
       }
     });
   }
@@ -56,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Consumer2<UserProvider, FamilyProvider>(
                     builder: (context, userProvider, familyProvider, _) {
                       final name = dashboardData?.name ?? userProvider.name;
+                      final hasFamily =dashboardData?.familyId != null;
 
                       return Container(
                         color: Colors.white,
@@ -68,54 +82,115 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   Text(
                                     'Hello, ${name.isNotEmpty ? name : "User"}',
-                                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColor.textPrimary,
+                                    ),
                                   ),
 
                                   const SizedBox(height: 4),
 
-                                  Text('Welcome back to Profit From It', style: GoogleFonts.poppins(fontSize: 12, color: AppColor.textSecondary)),
+                                  Text(
+                                    'Welcome back to Profit From It',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: AppColor.textSecondary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
 
-                            InkWell(
-                              borderRadius: BorderRadius.circular(30),
-                              onTap: () {
-                                _showFamilySelection(context);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: AppColor.primary.withValues(alpha: .08),
-                                  borderRadius: BorderRadius.circular(25),
-                                  border: Border.all(color: AppColor.primary.withValues(alpha: .15)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 14,
-                                      backgroundColor: AppColor.primary,
-                                      child: Text((familyProvider.selectedFamily?.name ?? name).substring(0, 1).toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontSize: 12)),
+                            if (hasFamily)
+                              InkWell(
+                                borderRadius: BorderRadius.circular(30),
+
+                                onTap: () {
+                                  _showFamilySelection(context);
+                                },
+
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+
+                                  decoration: BoxDecoration(
+                                    color: AppColor.primary.withValues(
+                                      alpha: .08,
                                     ),
 
-                                    const SizedBox(width: 4),
+                                    borderRadius: BorderRadius.circular(25),
 
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(maxWidth: 90),
-                                      child: Text(
-                                        "Family Members",
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                    border: Border.all(
+                                      color: AppColor.primary.withValues(
+                                        alpha: .15,
                                       ),
                                     ),
+                                  ),
 
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColor.primary),
-                                  ],
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 14,
+
+                                        backgroundColor: AppColor.primary,
+
+                                        child: Text(
+                                          _getSafeInitial(
+                                            familyProvider
+                                                    .selectedFamily
+                                                    ?.name ??
+                                                name,
+                                          ),
+
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 4),
+
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 90,
+                                        ),
+
+                                        child: Text(
+                                          "Family Members",
+
+                                          maxLines: 1,
+
+                                          overflow: TextOverflow.ellipsis,
+
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 10,
+
+                                            fontWeight: FontWeight.w600,
+
+                                            color: AppColor.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 4),
+
+                                      const Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+
+                                        size: 20,
+
+                                        color: AppColor.primary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                       );
@@ -125,7 +200,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async {
-                        await homeProvider.refreshDashboard(context, isRefresh: true);
+                        await homeProvider.refreshDashboard(
+                          context,
+                          isRefresh: true,
+                        );
                       },
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -144,40 +222,136 @@ class _HomeScreenState extends State<HomeScreen> {
                                   // realized
                                   Container(
                                     height: 56,
-                                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                    decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColor.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 38,
-                                              height: 38,
-                                              decoration: BoxDecoration(color: AmountUtils.isPositive(homeProvider.dashboardData?.realised) ? AppColor.green.withValues(alpha: 0.12) : AppColor.red.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                              child: Center(
-                                                child: Image.asset(AmountUtils.isPositive(homeProvider.dashboardData?.realised) ? AppImages.realised : AppImages.unRealised, color: AmountUtils.isPositive(homeProvider.dashboardData?.realised) ? AppColor.green : AppColor.red, width: 25, height: 25),
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 38,
+                                                height: 38,
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      AmountUtils.isPositive(
+                                                        homeProvider
+                                                            .dashboardData
+                                                            ?.realised,
+                                                      )
+                                                      ? AppColor.green
+                                                            .withValues(
+                                                              alpha: 0.12,
+                                                            )
+                                                      : AppColor.red.withValues(
+                                                          alpha: 0.12,
+                                                        ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Center(
+                                                  child: Image.asset(
+                                                    AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.realised,
+                                                        )
+                                                        ? AppImages.realised
+                                                        : AppImages.unRealised,
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.realised,
+                                                        )
+                                                        ? AppColor.green
+                                                        : AppColor.red,
+                                                    width: 25,
+                                                    height: 25,
+                                                  ),
+                                                ),
+                                              ),
+
+                                              const SizedBox(width: 8),
+
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      'Realised P&L',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+
+                                                    Text(
+                                                      'Total booked profit / loss',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 10,
+                                                            color: AppColor
+                                                                .textSecondary,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 8),
+
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 125,
+                                          ),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerRight,
+                                            child: Text(
+                                              homeProvider
+                                                      .dashboardData
+                                                      ?.realised ??
+                                                  "-",
+                                              maxLines: 1,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color:
+                                                    AmountUtils.isPositive(
+                                                      homeProvider
+                                                          .dashboardData
+                                                          ?.realised,
+                                                    )
+                                                    ? AppColor.green
+                                                    : AppColor.red,
                                               ),
                                             ),
-                                            SizedBox(width: 8),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  'Realised P&L',
-                                                  textAlign: TextAlign.left,
-                                                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
-                                                ),
-                                                Text('Total booked profit / loss', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                        Text(
-                                          homeProvider.dashboardData?.realised ?? "-",
-                                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AmountUtils.isPositive(homeProvider.dashboardData?.realised) ? AppColor.green : AppColor.red),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -186,93 +360,261 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Divider(height: 0.3, color: AppColor.divider),
                                   Container(
                                     height: 56,
-                                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                    decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColor.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 38,
-                                              height: 38,
-                                              decoration: BoxDecoration(color: AmountUtils.isPositive(homeProvider.dashboardData?.unrealised) ? AppColor.green.withValues(alpha: 0.12) : AppColor.red.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                              child: Center(
-                                                child: Image.asset(
-                                                  AmountUtils.isPositive(homeProvider.dashboardData?.unrealised) ? AppImages.realised : AppImages.unRealised,
-                                                  color: AmountUtils.isPositive(homeProvider.dashboardData?.unrealised) ? AppColor.green : AppColor.red,
-                                                  width: 25,
-                                                  height: 25,
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 38,
+                                                height: 38,
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      AmountUtils.isPositive(
+                                                        homeProvider
+                                                            .dashboardData
+                                                            ?.unrealised,
+                                                      )
+                                                      ? AppColor.green
+                                                            .withValues(
+                                                              alpha: 0.12,
+                                                            )
+                                                      : AppColor.red.withValues(
+                                                          alpha: 0.12,
+                                                        ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Center(
+                                                  child: Image.asset(
+                                                    AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.unrealised,
+                                                        )
+                                                        ? AppImages.realised
+                                                        : AppImages.unRealised,
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.unrealised,
+                                                        )
+                                                        ? AppColor.green
+                                                        : AppColor.red,
+                                                    width: 25,
+                                                    height: 25,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  'Un-Realised P&L',
-                                                  textAlign: TextAlign.left,
-                                                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+
+                                              const SizedBox(width: 8),
+
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      'Un-Realised P&L',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+
+                                                    Text(
+                                                      'Current market profit / loss',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 10,
+                                                            color: AppColor
+                                                                .textSecondary,
+                                                          ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                Text('Current market profit / loss', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
-                                              ],
-                                            ),
-                                          ],
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                        Text(
-                                          homeProvider.dashboardData?.unrealised ?? "-",
-                                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AmountUtils.isPositive(homeProvider.dashboardData?.unrealised) ? AppColor.green : AppColor.red),
+
+                                        const SizedBox(width: 8),
+
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 125,
+                                          ),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerRight,
+                                            child: Text(
+                                              homeProvider
+                                                      .dashboardData
+                                                      ?.unrealised ??
+                                                  "-",
+                                              maxLines: 1,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color:
+                                                    AmountUtils.isPositive(
+                                                      homeProvider
+                                                          .dashboardData
+                                                          ?.unrealised,
+                                                    )
+                                                    ? AppColor.green
+                                                    : AppColor.red,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   // dividend
                                   Divider(height: 0.3, color: AppColor.divider),
+
                                   Container(
                                     height: 56,
-                                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                    decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColor.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 38,
-                                              height: 38,
-                                              decoration: BoxDecoration(color: AppColor.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                              child: Center(child: Image.asset(AppImages.dividend, color: AppColor.primary, width: 25, height: 25)),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  'Dividend Income',
-                                                  textAlign: TextAlign.left,
-                                                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 38,
+                                                height: 38,
+                                                decoration: BoxDecoration(
+                                                  color: AppColor.primary
+                                                      .withValues(alpha: 0.12),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
                                                 ),
-                                                Text('Total dividend earned', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
-                                              ],
-                                            ),
-                                          ],
+                                                child: Center(
+                                                  child: Image.asset(
+                                                    AppImages.dividend,
+                                                    color: AppColor.primary,
+                                                    width: 25,
+                                                    height: 25,
+                                                  ),
+                                                ),
+                                              ),
+
+                                              const SizedBox(width: 8),
+
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      'Dividend Income',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+
+                                                    Text(
+                                                      'Total dividend earned',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 10,
+                                                            color: AppColor
+                                                                .textSecondary,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                        Text(
-                                          homeProvider.dashboardData?.dividend ?? "-",
-                                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF082EAF)),
+
+                                        const SizedBox(width: 8),
+
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 125,
+                                          ),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerRight,
+                                            child: Text(
+                                              homeProvider
+                                                      .dashboardData
+                                                      ?.dividend ??
+                                                  "-",
+                                              maxLines: 1,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF082EAF),
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
+                                  ),
+
+                                  NetContributionTile(
+                                    value:
+                                        homeProvider
+                                            .dashboardData
+                                            ?.netContribution ??
+                                        "₹0.00",
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 16),
+
                             // holding / Gainers / Losers
                             Card(
                               color: AppColor.white,
@@ -282,10 +624,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(8,8,8,0),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      8,
+                                      8,
+                                      8,
+                                      0,
+                                    ),
                                     child: Text(
                                       'Portfolio Summary',
-                                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColor.textPrimary,
+                                      ),
                                     ),
                                   ),
                                   Row(
@@ -295,31 +646,83 @@ class _HomeScreenState extends State<HomeScreen> {
                                         flex: 1,
                                         child: Container(
                                           height: 56,
-                                          padding: EdgeInsets.fromLTRB(8, 8, 8, 8),
-                                          decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                          padding: EdgeInsets.fromLTRB(
+                                            8,
+                                            8,
+                                            8,
+                                            8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColor.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                           child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
                                             children: [
                                               Row(
                                                 children: [
                                                   Container(
                                                     width: 30,
                                                     height: 30,
-                                                    decoration: BoxDecoration(color: AppColor.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(50)),
-                                                    child: Center(child: Image.asset(AppImages.holdings, color: AppColor.primary, width: 20, height: 20)),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColor.primary
+                                                          .withValues(
+                                                            alpha: 0.12,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            50,
+                                                          ),
+                                                    ),
+                                                    child: Center(
+                                                      child: Image.asset(
+                                                        AppImages.holdings,
+                                                        color: AppColor.primary,
+                                                        width: 20,
+                                                        height: 20,
+                                                      ),
+                                                    ),
                                                   ),
                                                   SizedBox(width: 6),
                                                   Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
                                                     children: [
                                                       Text(
-                                                        homeProvider.dashboardData?.totalHolding ?? "-",
-                                                        textAlign: TextAlign.left,
-                                                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                                        homeProvider
+                                                                .dashboardData
+                                                                ?.totalHolding ??
+                                                            "-",
+                                                        textAlign:
+                                                            TextAlign.left,
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: AppColor
+                                                                  .textPrimary,
+                                                            ),
                                                       ),
-                                                      Text('Holdings', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
+                                                      Text(
+                                                        'Holdings',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 10,
+                                                              color: AppColor
+                                                                  .textSecondary,
+                                                            ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ],
@@ -338,31 +741,83 @@ class _HomeScreenState extends State<HomeScreen> {
                                         flex: 1,
                                         child: Container(
                                           height: 56,
-                                          padding: EdgeInsets.fromLTRB(8, 8, 8, 8),
-                                          decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                          padding: EdgeInsets.fromLTRB(
+                                            8,
+                                            8,
+                                            8,
+                                            8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColor.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                           child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
                                             children: [
                                               Row(
                                                 children: [
                                                   Container(
                                                     width: 30,
                                                     height: 30,
-                                                    decoration: BoxDecoration(color: AppColor.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(50)),
-                                                    child: Center(child: Image.asset(AppImages.realised, color: AppColor.green, width: 20, height: 20)),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColor.green
+                                                          .withValues(
+                                                            alpha: 0.12,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            50,
+                                                          ),
+                                                    ),
+                                                    child: Center(
+                                                      child: Image.asset(
+                                                        AppImages.realised,
+                                                        color: AppColor.green,
+                                                        width: 20,
+                                                        height: 20,
+                                                      ),
+                                                    ),
                                                   ),
                                                   SizedBox(width: 8),
                                                   Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
                                                     children: [
                                                       Text(
-                                                        homeProvider.dashboardData?.totalGainer ?? "-",
-                                                        textAlign: TextAlign.left,
-                                                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                                        homeProvider
+                                                                .dashboardData
+                                                                ?.totalGainer ??
+                                                            "-",
+                                                        textAlign:
+                                                            TextAlign.left,
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: AppColor
+                                                                  .textPrimary,
+                                                            ),
                                                       ),
-                                                      Text('Gainers', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
+                                                      Text(
+                                                        'Gainers',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 10,
+                                                              color: AppColor
+                                                                  .textSecondary,
+                                                            ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ],
@@ -381,18 +836,39 @@ class _HomeScreenState extends State<HomeScreen> {
                                         flex: 1,
                                         child: Container(
                                           height: 56,
-                                          padding: EdgeInsets.fromLTRB(8, 8, 8, 8),
-                                          decoration: BoxDecoration(color: AppColor.white, borderRadius: BorderRadius.circular(12)),
+                                          padding: EdgeInsets.fromLTRB(
+                                            8,
+                                            8,
+                                            8,
+                                            8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColor.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                           child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
                                             children: [
                                               Row(
                                                 children: [
                                                   Container(
                                                     width: 30,
                                                     height: 30,
-                                                    decoration: BoxDecoration(color: AppColor.red.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(50)),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColor.red
+                                                          .withValues(
+                                                            alpha: 0.12,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            50,
+                                                          ),
+                                                    ),
                                                     child: Center(
                                                       child: Image.asset(
                                                         AppImages.unRealised,
@@ -404,15 +880,39 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   ),
                                                   SizedBox(width: 8),
                                                   Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
                                                     children: [
                                                       Text(
-                                                        homeProvider.dashboardData?.totalLoser ?? "-",
-                                                        textAlign: TextAlign.left,
-                                                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                                        homeProvider
+                                                                .dashboardData
+                                                                ?.totalLoser ??
+                                                            "-",
+                                                        textAlign:
+                                                            TextAlign.left,
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: AppColor
+                                                                  .textPrimary,
+                                                            ),
                                                       ),
-                                                      Text('Losers', style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
+                                                      Text(
+                                                        'Losers',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontSize: 10,
+                                                              color: AppColor
+                                                                  .textSecondary,
+                                                            ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ],
@@ -433,7 +933,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Text(
                                   'Top Holdings',
-                                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColor.textPrimary,
+                                  ),
                                 ),
                                 if (homeProvider.topHoldings.isNotEmpty)
                                   TextButton(
@@ -442,7 +946,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     },
                                     child: Text(
                                       'View All',
-                                      style: GoogleFonts.poppins(fontSize: 13, color: AppColor.primary, fontWeight: FontWeight.w500),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: AppColor.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -454,7 +962,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               Center(
                                 child: Padding(
                                   padding: const EdgeInsets.all(20),
-                                  child: Text("No holdings available", style: GoogleFonts.poppins()),
+                                  child: Text(
+                                    "No holdings available",
+                                    style: GoogleFonts.poppins(),
+                                  ),
                                 ),
                               ),
 
@@ -465,7 +976,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   nextRoute(
                                     MaterialPageRoute(
                                       builder: (context) {
-                                        return StockDetailScreen(stockId: stock.id.toString());
+                                        return StockDetailScreen(
+                                          stockId: stock.id.toString(),
+                                        );
                                       },
                                     ),
                                   );
@@ -488,12 +1001,17 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => const FamilySelectionBottomSheet(),
     );
 
     if (changed == true && context.mounted) {
-      await context.read<HomeProvider>().refreshDashboard(context, isRefresh: false);
+      await context.read<HomeProvider>().refreshDashboard(
+        context,
+        isRefresh: false,
+      );
     }
   }
 }
@@ -509,13 +1027,17 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   static const List<String> _periods = ['1M', '3M', '1Y', 'MAX'];
 
   List<FlSpot> _getChartSpots(HomeProvider provider) {
-    final values = provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
+    final values =
+        provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
 
     if (values.isEmpty) {
       return [];
     }
 
-    return List.generate(values.length, (index) => FlSpot(index.toDouble(), values[index]));
+    return List.generate(
+      values.length,
+      (index) => FlSpot(index.toDouble(), values[index]),
+    );
   }
 
   List<DateTime> _getDates(HomeProvider provider) {
@@ -555,16 +1077,30 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   }
 
   String _formatAmount(double value) {
-    if (value >= 10000000) {
-      return "${(value / 10000000).toStringAsFixed(1)}Cr";
+    final absValue = value.abs();
+
+    if (absValue >= 10000000) {
+      final amount = value / 10000000;
+
+      return amount == amount.roundToDouble()
+          ? "${amount.toStringAsFixed(0)}Cr"
+          : "${amount.toStringAsFixed(1)}Cr";
     }
 
-    if (value >= 100000) {
-      return "${(value / 100000).toStringAsFixed(1)}L";
+    if (absValue >= 100000) {
+      final amount = value / 100000;
+
+      return amount == amount.roundToDouble()
+          ? "${amount.toStringAsFixed(0)}L"
+          : "${amount.toStringAsFixed(1)}L";
     }
 
-    if (value >= 1000) {
-      return "${(value / 1000).toStringAsFixed(0)}K";
+    if (absValue >= 1000) {
+      final amount = value / 1000;
+
+      return amount == amount.roundToDouble()
+          ? "${amount.toStringAsFixed(0)}K"
+          : "${amount.toStringAsFixed(1)}K";
     }
 
     return value.toStringAsFixed(0);
@@ -573,10 +1109,24 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   Widget _leftTitles(double value, TitleMeta meta) {
     return SideTitleWidget(
       meta: meta,
-      child: Text(
-        _formatAmount(value),
-        textAlign: TextAlign.right,
-        style: GoogleFonts.poppins(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500),
+      space: 6,
+      child: SizedBox(
+        width: 48,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            _formatAmount(value),
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -600,7 +1150,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         break;
 
       case '3M':
-        show = index == 0 || index == total ~/ 3 || index == (total * 2) ~/ 3 || index == total - 1;
+        show =
+            index == 0 ||
+            index == total ~/ 3 ||
+            index == (total * 2) ~/ 3 ||
+            index == total - 1;
         break;
 
       case '1Y':
@@ -638,12 +1192,39 @@ class _PortfolioCardState extends State<_PortfolioCard> {
 
     return SideTitleWidget(
       meta: meta,
-      child: Text(text, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 10)),
+      space: 8,
+      child: Transform.translate(
+        offset: index == 0
+            ? const Offset(14, 0)
+            : index == total - 1
+            ? const Offset(-10, 0)
+            : Offset.zero,
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          style: GoogleFonts.poppins(color: Colors.white70, fontSize: 10),
+        ),
+      ),
     );
   }
 
   String _month(int month) {
-    const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return months[month];
   }
 
@@ -660,12 +1241,25 @@ class _PortfolioCardState extends State<_PortfolioCard> {
             height: 220,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF0D3CCF), Color(0xFF082EAF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0D3CCF), Color(0xFF082EAF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(8),
-              boxShadow: [BoxShadow(color: AppColor.primary.withValues(alpha: .35), blurRadius: 20, offset: const Offset(0, 8))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColor.primary.withValues(alpha: .35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Center(
-              child: Text("No chart data available", style: GoogleFonts.poppins(color: AppColor.white, fontSize: 14)),
+              child: Text(
+                "No chart data available",
+                style: GoogleFonts.poppins(color: AppColor.white, fontSize: 14),
+              ),
             ),
           );
         }
@@ -675,46 +1269,106 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFF0D3CCF), Color(0xFF082EAF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0D3CCF), Color(0xFF082EAF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: AppColor.primary.withValues(alpha: .35), blurRadius: 20, offset: const Offset(0, 8))],
+            boxShadow: [
+              BoxShadow(
+                color: AppColor.primary.withValues(alpha: .35),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Portfolio", style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70)),
+              Text(
+                "Portfolio",
+                style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+              ),
               const SizedBox(height: 4),
               Text(
                 dashboard?.portfolioValue ?? "0",
-                style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white),
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Total Gain/Loss", style: GoogleFonts.poppins(fontSize: 11, color: Colors.white60)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Total Gain/Loss",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.white60,
+                          ),
+                        ),
 
-                      Text(
-                        dashboard?.totalGainLoss ?? "0",
-                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: (dashboard?.totalGainLoss).toAmount() < 0 ? Colors.red : const Color(0xFF69FF8C)),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            dashboard?.totalGainLoss ?? "0",
+                            maxLines: 1,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: (dashboard?.totalGainLoss).toAmount() < 0
+                                  ? Colors.red
+                                  : const Color(0xFF69FF8C),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
-                  const Spacer(),
+                  const SizedBox(width: 16),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text("XIRR", style: GoogleFonts.poppins(fontSize: 11, color: Colors.white60)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          "XIRR",
+                          maxLines: 1,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.white60,
+                          ),
+                        ),
 
-                      Text(
-                        "${dashboard?.xirr ?? 0}%",
-                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            "${dashboard?.xirr ?? 0}%",
+                            maxLines: 1,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -731,11 +1385,23 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(color: selected ? Colors.white : Colors.white.withValues(alpha: .15), borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: .15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       child: Text(
                         period,
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? AppColor.primary : Colors.white),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? AppColor.primary : Colors.white,
+                        ),
                       ),
                     ),
                   );
@@ -746,7 +1412,9 @@ class _PortfolioCardState extends State<_PortfolioCard> {
               SizedBox(
                 height: 220,
                 child: provider.portfolioChartLoading
-                    ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
                     : LineChart(
                         LineChartData(
                           minX: 0,
@@ -760,17 +1428,45 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                             drawVerticalLine: false,
                             horizontalInterval: interval == 0 ? 1 : interval,
                             getDrawingHorizontalLine: (value) {
-                              return FlLine(color: Colors.white12, strokeWidth: 1);
+                              return FlLine(
+                                color: Colors.white12,
+                                strokeWidth: 1,
+                              );
                             },
                           ),
                           titlesData: FlTitlesData(
-                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
 
-                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
 
-                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, getTitlesWidget: _leftTitles)),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
 
-                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 22, getTitlesWidget: (value, meta) => _bottomTitles(value, meta, provider))),
+                                reservedSize: 52,
+
+                                interval: interval == 0 ? 1 : interval,
+
+                                minIncluded: false,
+
+                                getTitlesWidget: _leftTitles,
+                              ),
+                            ),
+
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+
+                                reservedSize: 30,
+
+                                getTitlesWidget: (value, meta) =>
+                                    _bottomTitles(value, meta, provider),
+                              ),
+                            ),
                           ),
                           lineTouchData: LineTouchData(
                             enabled: true,
@@ -783,7 +1479,14 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                                   final index = spot.x.toInt();
 
                                   if (index >= dates.length) {
-                                    return LineTooltipItem("₹${spot.y.toStringAsFixed(0)}", GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600));
+                                    return LineTooltipItem(
+                                      "₹${spot.y.toStringAsFixed(0)}",
+                                      GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    );
                                   }
 
                                   final date = dates[index];
@@ -791,7 +1494,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                                   return LineTooltipItem(
                                     "${date.day} ${_month(date.month)} ${date.year}\n"
                                     "₹${spot.y.toStringAsFixed(0)}",
-                                    GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                    GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   );
                                 }).toList();
                               },
@@ -802,7 +1509,12 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                                   FlLine(color: Colors.white30, strokeWidth: 1),
                                   FlDotData(
                                     getDotPainter: (spot, percent, bar, index) {
-                                      return FlDotCirclePainter(radius: 5, color: Colors.white, strokeWidth: 2, strokeColor: AppColor.primary);
+                                      return FlDotCirclePainter(
+                                        radius: 5,
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                        strokeColor: AppColor.primary,
+                                      );
                                     },
                                   ),
                                 );
@@ -820,12 +1532,22 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                               dotData: FlDotData(
                                 show: true,
                                 checkToShowDot: (spot, barData) {
-                                  return spot.x == 0 || spot.x == spots.length - 1;
+                                  return spot.x == 0 ||
+                                      spot.x == spots.length - 1;
                                 },
                               ),
                               belowBarData: BarAreaData(
                                 show: true,
-                                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.white.withValues(alpha: .35), Colors.white.withValues(alpha: .18), Colors.white.withValues(alpha: .05), Colors.transparent]),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.white.withValues(alpha: .35),
+                                    Colors.white.withValues(alpha: .18),
+                                    Colors.white.withValues(alpha: .05),
+                                    Colors.transparent,
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -867,7 +1589,13 @@ class _HoldingTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 14, offset: const Offset(0, 5))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -877,24 +1605,39 @@ class _HoldingTile extends StatelessWidget {
                 width: 4,
                 decoration: BoxDecoration(
                   color: gainColor,
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(25), bottomLeft: Radius.circular(25)),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(25),
+                    bottomLeft: Radius.circular(25),
+                  ),
                 ),
               ),
 
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 8, right: 6, top: 8, bottom: 8),
+                  padding: const EdgeInsets.only(
+                    left: 8,
+                    right: 6,
+                    top: 8,
+                    bottom: 8,
+                  ),
                   child: Row(
                     children: [
                       /// Avatar
                       Container(
                         width: 40,
                         height: 40,
-                        decoration: BoxDecoration(color: gainColor.withValues(alpha: .10), borderRadius: BorderRadius.circular(14)),
+                        decoration: BoxDecoration(
+                          color: gainColor.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         alignment: Alignment.center,
                         child: Text(
                           getInitials(holding.assetName ?? ''),
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: gainColor),
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: gainColor,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -910,12 +1653,22 @@ class _HoldingTile extends StatelessWidget {
                               holding.assetName ?? '',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColor.textPrimary,
+                              ),
                             ),
 
                             const SizedBox(height: 8),
 
-                            Text("Today's Gain", style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
+                            Text(
+                              "Today's Gain",
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: AppColor.textSecondary,
+                              ),
+                            ),
 
                             const SizedBox(height: 6),
 
@@ -923,16 +1676,29 @@ class _HoldingTile extends StatelessWidget {
                               spacing: 8,
                               runSpacing: 6,
                               children: [
-                                if ((holding.todays ?? "").isNotEmpty) _gainChip(value: holding.todays!, color: todayColor),
+                                if ((holding.todays ?? "").isNotEmpty)
+                                  _gainChip(
+                                    value: holding.todays!,
+                                    color: todayColor,
+                                  ),
 
-                                if (holding.todaysPercentage != 0.0) _gainChip(value: "${todayPercent.toStringAsFixed(2)}%", color: todayColor),
+                                if (holding.todaysPercentage != 0.0)
+                                  _gainChip(
+                                    value:
+                                        "${todayPercent.toStringAsFixed(2)}%",
+                                    color: todayColor,
+                                  ),
                               ],
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(width: 1, color: Colors.grey.shade300, margin: const EdgeInsets.symmetric(vertical: 4)),
+                      Container(
+                        width: 1,
+                        color: Colors.grey.shade300,
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                      ),
                       const SizedBox(width: 8),
 
                       /// Right Values
@@ -942,24 +1708,44 @@ class _HoldingTile extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text("Invested", style: GoogleFonts.poppins(fontSize: 9, color: AppColor.textSecondary)),
+                            Text(
+                              "Invested",
+                              style: GoogleFonts.poppins(
+                                fontSize: 9,
+                                color: AppColor.textSecondary,
+                              ),
+                            ),
 
                             const SizedBox(height: 2),
 
                             Text(
                               holding.investedValue ?? "",
-                              style: GoogleFonts.poppins(color: AppColor.black, fontWeight: FontWeight.w600, fontSize: 10),
+                              style: GoogleFonts.poppins(
+                                color: AppColor.black,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
                             ),
 
                             const SizedBox(height: 6),
 
-                            Text("Current", style: GoogleFonts.poppins(fontSize: 9, color: AppColor.textSecondary)),
+                            Text(
+                              "Current",
+                              style: GoogleFonts.poppins(
+                                fontSize: 9,
+                                color: AppColor.textSecondary,
+                              ),
+                            ),
 
                             const SizedBox(height: 2),
 
                             Text(
                               holding.currentValue ?? "",
-                              style: GoogleFonts.poppins(color: AppColor.black, fontWeight: FontWeight.w600, fontSize: 10),
+                              style: GoogleFonts.poppins(
+                                color: AppColor.black,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
                             ),
                           ],
                         ),
@@ -972,11 +1758,21 @@ class _HoldingTile extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(isGain ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: gainColor, size: 20),
+                            Icon(
+                              isGain
+                                  ? Icons.arrow_drop_up
+                                  : Icons.arrow_drop_down,
+                              color: gainColor,
+                              size: 20,
+                            ),
 
                             Text(
                               "${gainPercent.abs().toStringAsFixed(2)}%",
-                              style: GoogleFonts.poppins(color: gainColor, fontWeight: FontWeight.w700, fontSize: 10),
+                              style: GoogleFonts.poppins(
+                                color: gainColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 10,
+                              ),
                             ),
                           ],
                         ),
@@ -995,10 +1791,17 @@ class _HoldingTile extends StatelessWidget {
   Widget _gainChip({required String value, required Color color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Text(
         value,
-        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+        style: GoogleFonts.poppins(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }

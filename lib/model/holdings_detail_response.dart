@@ -141,6 +141,9 @@ class Data {
 class Holding {
   String? id;
   String? assetName;
+
+  double? netQuantity;
+
   String? investedValue;
   String? currentValue;
   String? todays;
@@ -150,6 +153,7 @@ class Holding {
   Holding({
     this.id,
     this.assetName,
+    this.netQuantity,
     this.investedValue,
     this.currentValue,
     this.todays,
@@ -157,19 +161,28 @@ class Holding {
     this.gainPercent,
   });
 
-  factory Holding.fromJson(Map<String, dynamic> json) => Holding(
-    id: json["id"],
-    assetName: json["asset_name"],
-    investedValue: json["invested_value"],
-    currentValue: json["current_value"],
-    todays: json["todays"],
-    todaysPercentage: json["todays_percentage"]?.toDouble(),
-    gainPercent: json["gain_percent"]?.toDouble(),
+factory Holding.fromJson(Map<String, dynamic> json) => Holding(
+    id: json["id"]?.toString(),
+
+    assetName: json["asset_name"]?.toString(),
+
+    netQuantity: double.tryParse(json["net_quantity"]?.toString() ?? "0") ?? 0.0,
+
+    investedValue: json["invested_value"]?.toString(),
+
+    currentValue: json["current_value"]?.toString(),
+
+    todays: json["todays"]?.toString(),
+
+    todaysPercentage: double.tryParse(json["todays_percentage"]?.toString() ?? "0") ?? 0.0,
+
+    gainPercent: double.tryParse(json["gain_percent"]?.toString() ?? "0") ?? 0.0,
   );
 
   Map<String, dynamic> toJson() => {
     "id": id,
     "asset_name": assetName,
+    "net_quantity": netQuantity,
     "invested_value": investedValue,
     "current_value": currentValue,
     "todays": todays,

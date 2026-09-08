@@ -34,6 +34,10 @@ class AuthProvider extends ChangeNotifier {
 
   LoginResponse? loginResponse;
 
+  // Temporary pre-OTP token.
+// It exists only while the app is running.
+String _pendingOtpToken = "";
+
   String otp = "";
 
   void updateOTP(String code) {
@@ -83,75 +87,189 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Login Function
-  Future<bool> login() async {
-    final mobile = mobileController.text.trim();
-    _loginLoading = true;
+ Future<bool> login() async {
+  final mobile = mobileController.text.trim();
+
+  _loginLoading = true;
+  notifyListeners();
+
+  try {
+    // Start a fresh login attempt.
+    _pendingOtpToken = "";
+
+    var body = {
+      "email": mobile,
+    };
+
+    // Login API should not use an old authenticated token.
+    Response? response = await httpPost(
+      CMD.login,
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    );
+
+    _loginLoading = false;
     notifyListeners();
-    try {
-      var body = {"email": mobile};
 
-      Response? response = await httpPost(CMD.login, body);
-      _loginLoading = false;
-      notifyListeners();
-      if (response == null) return false;
-      loginResponse = LoginResponse.fromJson(jsonDecode(response.body));
+    if (response == null) {
+      return false;
+    }
 
-      if (loginResponse != null && loginResponse!.status == 200) {
-        LocalStorage.saveAccessToken(loginResponse!.data!.token.toString());
-        return true;
-      } else {
-        showError(loginResponse!.message.toString());
+    loginResponse = LoginResponse.fromJson(
+      jsonDecode(response.body),
+    );
+
+    if (loginResponse != null &&
+        loginResponse!.status == 200) {
+      
+      final pendingToken =
+          loginResponse!.data?.token?.trim() ?? "";
+
+      if (pendingToken.isEmpty) {
+        showError(
+          "Unable to start OTP verification. Please try again.",
+        );
         return false;
       }
-    } catch (e) {
-      debugPrint("error when login =======> ${e.toString()}");
-      _loginLoading = false;
-      notifyListeners();
-      if (e is SocketException) {
-        showError("No internet connection. Please check your network.");
-      } else {
-        showError("Something went wrong. Please try again.");
-      }
+
+      // IMPORTANT:
+      // Do NOT save this in SharedPreferences.
+      // User is still NOT logged in.
+      _pendingOtpToken = pendingToken;
+
+      return true;
+    } else {
+      showError(
+        loginResponse?.message.toString() ?? "Login failed",
+      );
 
       return false;
     }
-  }
+  } catch (e) {
+    debugPrint(
+      "error when login =======> ${e.toString()}",
+    );
 
-  Future<bool> otpVerification(BuildContext context) async {
+    _loginLoading = false;
+    notifyListeners();
+
+    if (e is SocketException) {
+      showError(
+        "No internet connection. Please check your network.",
+      );
+    } else {
+      showError(
+        "Something went wrong. Please try again.",
+      );
+    }
+
+    return false;
+  }
+}
+
+Future<bool> otpVerification(BuildContext context) async {
     _isLoading = true;
     notifyListeners();
+
     try {
+      if (_pendingOtpToken.isEmpty) {
+        _isLoading = false;
+        notifyListeners();
+
+        showError("Login session expired. Please login again.");
+
+        return false;
+      }
+
       var body = {"force_logout_previous": forceLogoutPrevious, "otp": otp};
 
-      Response? response = await httpPost(CMD.otpVerification, body);
+      Response? response = await httpPost(
+        CMD.otpVerification,
+        body,
+        headers: {
+          "Authorization": "Bearer $_pendingOtpToken",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      );
+
       _isLoading = false;
       notifyListeners();
-      if (response == null) return false;
-      OtpVerificationResponse loginResponse = OtpVerificationResponse.fromJson(jsonDecode(response.body));
-      LocalStorage.saveOTPResponse(loginResponse);
-      if (loginResponse.status == 200) {
+
+      if (response == null) {
+        return false;
+      }
+
+      OtpVerificationResponse verificationResponse =
+          OtpVerificationResponse.fromJson(jsonDecode(response.body));
+
+      if (verificationResponse.status == 200 &&
+          verificationResponse.data != null) {
+        final verifiedToken = verificationResponse.data!.token?.trim() ?? "";
+
+        final verifiedUserId =
+            verificationResponse.data!.defaultLoginId?.trim() ?? "";
+
+        if (verifiedToken.isEmpty || verifiedUserId.isEmpty) {
+          showError(
+            "OTP verified, but login session data is missing. Please try again.",
+          );
+
+          return false;
+        }
+
+        // ONLY NOW is the user actually authenticated.
+
+        await LocalStorage.saveOTPResponse(verificationResponse);
+
+        await LocalStorage.saveId(verifiedUserId);
+
+        await LocalStorage.saveCode(verificationResponse.data!.code.toString());
+
+        await LocalStorage.saveName(verificationResponse.data!.name.toString());
+
+        await LocalStorage.saveEmail(
+          verificationResponse.data!.email.toString(),
+        );
+
+        await LocalStorage.saveMobile(
+          verificationResponse.data!.mobile.toString(),
+        );
+
+        // Real authenticated token is saved ONLY after OTP.
+        await LocalStorage.saveAccessToken(verifiedToken);
+
+        SessionManager.changeUser(verifiedUserId);
+
         clearAllData();
-        LocalStorage.saveId(loginResponse.data!.defaultLoginId.toString());
-        LocalStorage.saveAccessToken(loginResponse.data!.token.toString());
-        LocalStorage.saveCode(loginResponse.data!.code.toString());
-        LocalStorage.saveName(loginResponse.data!.name.toString());
-        LocalStorage.saveEmail(loginResponse.data!.email.toString());
-        LocalStorage.saveMobile(loginResponse.data!.mobile.toString());
-        SessionManager.changeUser(loginResponse.data!.defaultLoginId.toString());
+
         if (context.mounted) {
-          Provider.of<UserProvider>(context, listen: false).updateUser(name: loginResponse.data!.name.toString(), image: "", code: loginResponse.data!.code.toString(), email: loginResponse.data!.email.toString(), mobile: loginResponse.data!.mobile.toString());
+          Provider.of<UserProvider>(context, listen: false).updateUser(
+            name: verificationResponse.data!.name.toString(),
+            image: "",
+            code: verificationResponse.data!.code.toString(),
+            email: verificationResponse.data!.email.toString(),
+            mobile: verificationResponse.data!.mobile.toString(),
+          );
+
           notifyListeners();
         }
+
         return true;
       } else {
-        showError(loginResponse.message.toString());
+        showError(verificationResponse.message.toString());
+
         return false;
       }
     } catch (e) {
-      debugPrint("error when login =======> ${e.toString()}");
-      debugPrint("error when login =======> ${e.toString()}");
+      debugPrint("error when OTP verification =======> ${e.toString()}");
+
       _isLoading = false;
       notifyListeners();
+
       if (e is SocketException) {
         showError("No internet connection. Please check your network.");
       } else {
@@ -207,28 +325,60 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> reSendOTP() async {
     stopTimer();
+
     _isLoading = true;
     notifyListeners();
+
     try {
+      if (_pendingOtpToken.isEmpty) {
+        _isLoading = false;
+        notifyListeners();
+
+        showError("Login session expired. Please login again.");
+
+        return false;
+      }
+
       var body = {};
 
-      Response? response = await httpPost(CMD.otpReSend, body);
+      Response? response = await httpPost(
+        CMD.otpReSend,
+        body,
+        headers: {
+          "Authorization": "Bearer $_pendingOtpToken",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      );
+
       _isLoading = false;
       notifyListeners();
-      if (response == null) return false;
+
+      if (response == null) {
+        return false;
+      }
+
       startTimer();
-      SendOTPResponse loginResponse = SendOTPResponse.fromJson(jsonDecode(response.body));
-      if (loginResponse.status == 200) {
-        showSuccess(loginResponse.message.toString());
+
+      SendOTPResponse otpResponse = SendOTPResponse.fromJson(
+        jsonDecode(response.body),
+      );
+
+      if (otpResponse.status == 200) {
+        showSuccess(otpResponse.message.toString());
+
         return true;
       } else {
-        showError(loginResponse.message.toString());
+        showError(otpResponse.message.toString());
+
         return false;
       }
     } catch (e) {
-      debugPrint("error when login =======> ${e.toString()}");
+      debugPrint("error when resending OTP =======> ${e.toString()}");
+
       _isLoading = false;
       notifyListeners();
+
       if (e is SocketException) {
         showError("No internet connection. Please check your network.");
       } else {
@@ -247,9 +397,11 @@ class AuthProvider extends ChangeNotifier {
   void clearAllData() {
     mobileController.clear();
     otp = "";
+    _pendingOtpToken = "";
   }
 
   void clearSharedPreference() {
+    _pendingOtpToken = "";
     LocalStorage.clearAll();
     notifyListeners();
   }

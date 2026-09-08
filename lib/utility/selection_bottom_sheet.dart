@@ -8,10 +8,17 @@ class SelectionBottomSheet<T> extends StatefulWidget {
   final String Function(T) itemText;
   final Function(T) onSelect;
 
-  const SelectionBottomSheet({super.key, required this.title, required this.items, required this.itemText, required this.onSelect});
+  const SelectionBottomSheet({
+    super.key,
+    required this.title,
+    required this.items,
+    required this.itemText,
+    required this.onSelect,
+  });
 
   @override
-  State<SelectionBottomSheet<T>> createState() => _SelectionBottomSheetState<T>();
+  State<SelectionBottomSheet<T>> createState() =>
+      _SelectionBottomSheetState<T>();
 }
 
 class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
@@ -30,7 +37,14 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
       if (query.trim().isEmpty) {
         filteredItems = widget.items;
       } else {
-        filteredItems = widget.items.where((item) => widget.itemText(item).toLowerCase().contains(query.toLowerCase())).toList();
+        filteredItems = widget.items
+            .where(
+              (item) => widget
+                  .itemText(item)
+                  .toLowerCase()
+                  .contains(query.toLowerCase()),
+            )
+            .toList();
       }
     });
   }
@@ -64,7 +78,10 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
             color: Colors.black,
             child: Row(
               children: [
-                Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 18)),
+                Text(
+                  widget.title,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
                 const Spacer(),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
@@ -84,9 +101,19 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
                 decoration: InputDecoration(
                   hintText: "Search...",
                   prefixIcon: const Icon(Icons.search, size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: _clearSearch) : null,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: _clearSearch,
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 0,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
@@ -101,7 +128,10 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
                       final item = filteredItems[index];
 
                       return ListTile(
-                        title: Text(widget.itemText(item), style: medium.copyWith(color: AppColor.black)),
+                        title: Text(
+                          widget.itemText(item),
+                          style: medium.copyWith(color: AppColor.black),
+                        ),
                         onTap: () {
                           widget.onSelect(item);
                           Navigator.pop(context);
