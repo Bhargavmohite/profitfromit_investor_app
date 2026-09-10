@@ -5,6 +5,7 @@ import 'package:profit_from_it_investors/ui/analytics_screen/analytics_screen.da
 import 'package:profit_from_it_investors/ui/authentication/profile_screen/profile_screen.dart';
 import 'package:profit_from_it_investors/ui/holdings_screen/holdings_screen.dart';
 import 'package:profit_from_it_investors/ui/home/home_screen.dart';
+import 'package:profit_from_it_investors/ui/taxometer_screen/taxometer_screen.dart';
 import 'package:profit_from_it_investors/ui/watchlist_screen/watchlist_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/style.dart';
@@ -33,6 +34,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       icon: Icon(Icons.bar_chart_outlined, color: AppColor.inactiveBottomMenu),
       activeIcon: Icon(Icons.bar_chart, color: AppColor.primary),
       label: 'Analytics',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.speed_outlined, color: AppColor.inactiveBottomMenu),
+      activeIcon: Icon(Icons.speed_rounded, color: AppColor.primary),
+      label: 'Taxometer',
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.bookmark_border, color: AppColor.inactiveBottomMenu),
@@ -66,6 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       HoldingsScreen(),
       AnalyticsScreen(),
+      TaxometerScreen(),
       WatchlistScreen(),
       ProfileScreen(),
     ];
@@ -100,8 +107,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     index = value;
                   });
                 },
+                type: BottomNavigationBarType.fixed,
                 backgroundColor: Colors.white,
-                iconSize: 24,
+                iconSize: 22,
+                selectedFontSize: 10,
+                unselectedFontSize: 10,
+                showUnselectedLabels: true,
                 selectedItemColor: AppColor.primary,
                 unselectedItemColor: AppColor.textLight,
               ),
