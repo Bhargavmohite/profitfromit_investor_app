@@ -2,7 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:profit_from_it_investors/provider/taxometer/taxometer_provider.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
+import 'package:provider/provider.dart';
 
 class TaxometerScreen extends StatefulWidget {
   const TaxometerScreen({super.key});
@@ -12,94 +14,151 @@ class TaxometerScreen extends StatefulWidget {
 }
 
 class _TaxometerScreenState extends State<TaxometerScreen> {
-  final List<String> _financialYears = const [
-    '2026-2027',
-    '2025-2026',
-    '2024-2025',
-    '2023-2024',
-  ];
+  @override
+  void initState() {
+    super.initState();
 
-  String _selectedFinancialYear = '2026-2027';
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
 
-  // ---------------------------------------------------------------------------
-  // PHASE 1: UI PREVIEW DATA ONLY
-  // These values will be replaced by TaxometerProvider/API data in Phase 2.
-  // ---------------------------------------------------------------------------
-  static const String _clientName = 'Aakash Ramawat';
-  static const String _clientCode = 'PF191';
-  static const String _realizedStcg = '₹2,000';
-  static const String _stcgTax = '₹400';
-  static const String _netRealizedLtcg = '₹13,807';
-  static const String _ltcgTax = '₹0';
-  static const String _dividend = '₹3,989';
-  static const String _totalTax = '₹400';
-  static const String _utilizedExemption = '₹13,807';
-  static const String _remainingExemption = '₹1,11,193';
-  static const double _exemptionProgress = 13807 / 125000;
+      await context.read<TaxometerProvider>().getTaxometer(context);
+    });
+  }
 
-  String get _fyShort {
-    final parts = _selectedFinancialYear.split('-');
-    if (parts.length != 2) return _selectedFinancialYear;
+  String _fyShort(String financialYear) {
+    final parts = financialYear.split('-');
+
+    if (parts.length != 2 || parts.first.length < 4 || parts.last.length < 4) {
+      return financialYear.isEmpty ? 'FY' : financialYear;
+    }
+
     return 'FY${parts.first.substring(2)}-${parts.last.substring(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final taxometerProvider = context.watch<TaxometerProvider>();
+    final taxData = taxometerProvider.taxData;
+
     return Scaffold(
       backgroundColor: AppColor.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeaderCard(),
-              const SizedBox(height: 16),
-              _buildStatCard(
-                indicatorColor: AppColor.danger,
-                title: 'REALIZED STCG (20%)',
-                amount: _realizedStcg,
-                taxLabel: 'Tax Impact:',
-                taxAmount: _stcgTax,
-                taxColor: AppColor.danger,
+      body:
+          taxometerProvider.taxometerLoading &&
+              taxometerProvider.taxometerResponse == null
+          ? const SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: AppColor.primary),
               ),
-              const SizedBox(height: 12),
-              _buildStatCard(
-                indicatorColor: const Color(0xFF10B981),
-                title: 'NET REALIZED LTCG (12.5%)',
-                amount: _netRealizedLtcg,
-                taxLabel: 'Tax Impact:',
-                taxAmount: _ltcgTax,
-                taxColor: const Color(0xFF10B981),
-              ),
-              const SizedBox(height: 12),
-              _buildDividendCard(),
-              const SizedBox(height: 12),
-              _buildTotalTaxCard(),
-              const SizedBox(height: 16),
-              _buildLiabilityMeterCard(),
-              const SizedBox(height: 16),
-              _buildExemptionCard(),
-              const SizedBox(height: 16),
-              _buildOptimizationCard(),
-              const SizedBox(height: 24),
-              Text(
-                '© 2026 Profit From It. All rights reserved.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 10,
-                  color: AppColor.textLight,
+            )
+          : taxData == null
+          ? SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 42,
+                        color: AppColor.textSecondary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        taxometerProvider.taxometerResponse?.message ??
+                            'Taxometer data is not available.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: AppColor.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          taxometerProvider.getTaxometer(context);
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : SafeArea(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await taxometerProvider.refreshTaxometer(context);
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildHeaderCard(taxometerProvider),
+                      const SizedBox(height: 16),
+                      _buildStatCard(
+                        indicatorColor: AppColor.danger,
+                        title: 'REALIZED STCG (20%)',
+                        amount: _formatCurrency(taxData.grossRealizedStcg),
+                        taxLabel: 'Tax Impact:',
+                        taxAmount: _formatCurrency(taxData.stcgTax),
+                        taxColor: AppColor.danger,
+                        amountColor: (taxData.grossRealizedStcg ?? 0) < 0
+                            ? AppColor.danger
+                            : AppColor.textPrimary,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildStatCard(
+                        indicatorColor: const Color(0xFF10B981),
+                        title: 'NET REALIZED LTCG (12.5%)',
+                        amount: _formatCurrency(taxData.netRealizedLtcg),
+                        taxLabel: 'Tax Impact:',
+                        taxAmount: _formatCurrency(taxData.ltcgTax),
+                        taxColor: const Color(0xFF10B981),
+                        detail: (taxData.stclSetoffAmount ?? 0) > 0
+                            ? '(${_formatCurrency(taxData.grossRealizedLtcg)} Gross LTCG - ${_formatCurrency(taxData.stclSetoffAmount)} ST Loss)'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildDividendCard(taxometerProvider),
+                      const SizedBox(height: 12),
+                      _buildTotalTaxCard(taxometerProvider),
+                      const SizedBox(height: 16),
+                      _buildLiabilityMeterCard(taxometerProvider),
+                      const SizedBox(height: 16),
+                      _buildExemptionCard(taxometerProvider),
+                      const SizedBox(height: 16),
+                      _buildOptimizationCard(taxometerProvider),
+                      const SizedBox(height: 24),
+                      Text(
+                        '© ${DateTime.now().year} Profit From It. All rights reserved.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: AppColor.textLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
     );
   }
 
-  Widget _buildHeaderCard() {
+  Widget _buildHeaderCard(TaxometerProvider provider) {
+    final financialYears = provider.financialYears;
+    final selectedFinancialYear =
+        financialYears.contains(provider.selectedFinancialYear)
+        ? provider.selectedFinancialYear
+        : (financialYears.isNotEmpty ? financialYears.first : null);
+
+    final clientName = (provider.client?.name ?? '').trim();
+    final clientCode = (provider.client?.ccode ?? '').trim();
+
     return _surfaceCard(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -163,7 +222,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$_fyShort Real-time Tax Liability & Optimization Engine',
+                      '${_fyShort(provider.selectedFinancialYear)} Real-time Tax Liability & Optimization Engine',
                       style: GoogleFonts.poppins(
                         fontSize: 9,
                         color: AppColor.textSecondary,
@@ -183,18 +242,34 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                   label: 'FINANCIAL YEAR',
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _selectedFinancialYear,
+                      value: selectedFinancialYear,
                       isExpanded: true,
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
+                      hint: Text(
+                        'Select FY',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: AppColor.textSecondary,
+                        ),
                       ),
+                      icon: provider.taxometerLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColor.primary,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 18,
+                            ),
                       style: GoogleFonts.poppins(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                         color: AppColor.textPrimary,
                       ),
-                      items: _financialYears
+                      items: financialYears
                           .map(
                             (year) => DropdownMenuItem<String>(
                               value: year,
@@ -206,18 +281,27 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                                     color: AppColor.textSecondary,
                                   ),
                                   const SizedBox(width: 8),
-                                  Flexible(child: Text(year)),
+                                  Flexible(
+                                    child: Text(
+                                      year,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           )
                           .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _selectedFinancialYear = value;
-                        });
-                      },
+                      onChanged: provider.taxometerLoading
+                          ? null
+                          : (value) async {
+                              if (value == null) return;
+
+                              await provider.changeFinancialYear(
+                                context,
+                                value,
+                              );
+                            },
                     ),
                   ),
                 ),
@@ -225,7 +309,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _selectorBox(
-                  label: 'SELECT CLIENT ACCOUNT',
+                  label: 'CLIENT ACCOUNT',
                   child: Row(
                     children: [
                       const Icon(
@@ -240,7 +324,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              _clientName,
+                              clientName.isNotEmpty ? clientName : 'My Account',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
@@ -249,21 +333,18 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                                 color: AppColor.textPrimary,
                               ),
                             ),
-                            Text(
-                              '($_clientCode)',
-                              maxLines: 1,
-                              style: GoogleFonts.poppins(
-                                fontSize: 8,
-                                color: AppColor.textSecondary,
+                            if (clientCode.isNotEmpty)
+                              Text(
+                                '($clientCode)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 8,
+                                  color: AppColor.textSecondary,
+                                ),
                               ),
-                            ),
                           ],
                         ),
-                      ),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: AppColor.textSecondary,
                       ),
                     ],
                   ),
@@ -276,10 +357,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _selectorBox({
-    required String label,
-    required Widget child,
-  }) {
+  Widget _selectorBox({required String label, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -319,6 +397,8 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     required String taxLabel,
     required String taxAmount,
     required Color taxColor,
+    String? detail,
+    Color? amountColor,
   }) {
     return _surfaceCard(
       padding: const EdgeInsets.all(16),
@@ -355,9 +435,19 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
             style: GoogleFonts.poppins(
               fontSize: 19,
               fontWeight: FontWeight.w700,
-              color: AppColor.textPrimary,
+              color: amountColor ?? AppColor.textPrimary,
             ),
           ),
+          if (detail != null && detail.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              detail,
+              style: GoogleFonts.poppins(
+                fontSize: 8,
+                color: AppColor.textSecondary,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 10),
@@ -394,7 +484,12 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _buildDividendCard() {
+  Widget _buildDividendCard(TaxometerProvider provider) {
+    final taxData = provider.taxData;
+    final dividendNote = (taxData?.dividendNote ?? '').trim().isNotEmpty
+        ? taxData!.dividendNote!.trim()
+        : 'Taxable as per your individual slab rate.';
+
     return _surfaceCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -424,7 +519,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _dividend,
+            _formatCurrency(taxData?.dividend),
             style: GoogleFonts.poppins(
               fontSize: 19,
               fontWeight: FontWeight.w700,
@@ -445,7 +540,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Taxable as per your individual slab rate',
+                  dividendNote,
                   style: GoogleFonts.poppins(
                     fontSize: 9,
                     color: AppColor.textSecondary,
@@ -459,7 +554,9 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _buildTotalTaxCard() {
+  Widget _buildTotalTaxCard(TaxometerProvider provider) {
+    final totalTax = provider.taxData?.totalTax ?? 0;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
@@ -495,7 +592,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'TOTAL ESTIMATED ${_fyShort.replaceFirst('FY', 'FY')} TAX',
+                'TOTAL ESTIMATED ${_fyShort(provider.selectedFinancialYear)} TAX',
                 style: GoogleFonts.poppins(
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
@@ -505,7 +602,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               ),
               const SizedBox(height: 3),
               Text(
-                _totalTax,
+                _formatCurrency(totalTax),
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -539,7 +636,24 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _buildLiabilityMeterCard() {
+  Widget _buildLiabilityMeterCard(TaxometerProvider provider) {
+    final taxData = provider.taxData;
+    final totalTax = taxData?.totalTax ?? 0;
+
+    // Same ₹5,00,000 display scale used by the website meter.
+    final meterProgress = (totalTax / 500000).clamp(0.0, 1.0).toDouble();
+
+    String currentBracket = 'No Tax Due';
+    Color currentBracketColor = AppColor.textSecondary;
+
+    if ((taxData?.netRealizedStcg ?? 0) > 0) {
+      currentBracket = 'Active STCG';
+      currentBracketColor = AppColor.danger;
+    } else if ((taxData?.taxableLtcg ?? 0) > 0) {
+      currentBracket = 'Active LTCG';
+      currentBracketColor = const Color(0xFF10B981);
+    }
+
     return _surfaceCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -574,7 +688,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'Slab 20%',
+                  'Live',
                   style: GoogleFonts.poppins(
                     fontSize: 8,
                     fontWeight: FontWeight.w500,
@@ -592,7 +706,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               children: [
                 Positioned.fill(
                   child: CustomPaint(
-                    painter: _TaxMeterPainter(progress: 0.20),
+                    painter: _TaxMeterPainter(progress: meterProgress),
                   ),
                 ),
                 Positioned(
@@ -600,7 +714,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                   child: Column(
                     children: [
                       Text(
-                        _totalTax,
+                        _formatCurrency(totalTax),
                         style: GoogleFonts.poppins(
                           fontSize: 21,
                           fontWeight: FontWeight.w700,
@@ -629,16 +743,16 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
             children: [
               Expanded(
                 child: _meterInfoBox(
-                  label: 'Threshold 0%',
-                  value: '₹0 - ₹1.25L',
+                  label: 'LTCG Exemption',
+                  value: _formatCurrency(taxData?.exemptionLimit),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _meterInfoBox(
                   label: 'Current Bracket',
-                  value: 'Active STCG',
-                  valueColor: AppColor.danger,
+                  value: currentBracket,
+                  valueColor: currentBracketColor,
                 ),
               ),
             ],
@@ -665,10 +779,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-              fontSize: 8,
-              color: AppColor.textLight,
-            ),
+            style: GoogleFonts.poppins(fontSize: 8, color: AppColor.textLight),
           ),
           const SizedBox(height: 2),
           Text(
@@ -686,7 +797,21 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _buildExemptionCard() {
+  Widget _buildExemptionCard(TaxometerProvider provider) {
+    final taxData = provider.taxData;
+
+    final exemptionLimit = taxData?.exemptionLimit ?? 125000;
+    final utilizedExemption = taxData?.utilizedExemption ?? 0;
+    final remainingExemption = taxData?.remainingExemption ?? 0;
+
+    final exemptionProgress = exemptionLimit > 0
+        ? (utilizedExemption / exemptionLimit).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+
+    final utilizedPercent = (exemptionProgress * 100).round();
+    final remainingPercent = 100 - utilizedPercent;
+    final hasRemainingExemption = remainingExemption > 0;
+
     return _surfaceCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -707,7 +832,9 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
+                  color: hasRemainingExemption
+                      ? const Color(0xFFD1FAE5)
+                      : const Color(0xFFFEE2E2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -716,18 +843,22 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                     Container(
                       width: 5,
                       height: 5,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF10B981),
+                      decoration: BoxDecoration(
+                        color: hasRemainingExemption
+                            ? const Color(0xFF10B981)
+                            : AppColor.danger,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'Available',
+                      hasRemainingExemption ? 'Available' : 'Utilized',
                       style: GoogleFonts.poppins(
                         fontSize: 8,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF047857),
+                        color: hasRemainingExemption
+                            ? const Color(0xFF047857)
+                            : const Color(0xFF991B1B),
                       ),
                     ),
                   ],
@@ -739,16 +870,22 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendDot(const Color(0xFF2563EB), 'Utilized (11%)'),
+              _legendDot(
+                const Color(0xFF2563EB),
+                'Utilized ($utilizedPercent%)',
+              ),
               const SizedBox(width: 14),
-              _legendDot(const Color(0xFFE2E8F0), 'Remaining (89%)'),
+              _legendDot(
+                const Color(0xFFE2E8F0),
+                'Remaining ($remainingPercent%)',
+              ),
             ],
           ),
           const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: LinearProgressIndicator(
-              value: _exemptionProgress,
+              value: exemptionProgress,
               minHeight: 9,
               backgroundColor: const Color(0xFFE2E8F0),
               valueColor: const AlwaysStoppedAnimation<Color>(
@@ -762,7 +899,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               Expanded(
                 child: _exemptionValue(
                   label: 'Utilized',
-                  value: _utilizedExemption,
+                  value: _formatCurrency(utilizedExemption),
                   alignment: CrossAxisAlignment.start,
                   valueColor: AppColor.primary,
                 ),
@@ -770,7 +907,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               Expanded(
                 child: _exemptionValue(
                   label: 'Remaining',
-                  value: _remainingExemption,
+                  value: _formatCurrency(remainingExemption),
                   alignment: CrossAxisAlignment.end,
                 ),
               ),
@@ -793,7 +930,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                '₹1,25,000',
+                _formatCurrency(exemptionLimit),
                 style: GoogleFonts.poppins(
                   fontSize: 8,
                   fontWeight: FontWeight.w600,
@@ -842,10 +979,7 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.poppins(
-            fontSize: 8,
-            color: AppColor.textLight,
-          ),
+          style: GoogleFonts.poppins(fontSize: 8, color: AppColor.textLight),
         ),
         const SizedBox(height: 2),
         Text(
@@ -860,7 +994,22 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
     );
   }
 
-  Widget _buildOptimizationCard() {
+  Widget _buildOptimizationCard(TaxometerProvider provider) {
+    final taxData = provider.taxData;
+
+    final exemptionHarvestAmount = taxData?.exemptionHarvestAmount ?? 0;
+    final exemptionSavings = taxData?.exemptionSavings ?? 0;
+    final taxLossHarvestAmount = taxData?.taxLossHarvestAmount ?? 0;
+    final taxLossSavings = taxData?.taxLossSavings ?? 0;
+    final dividend = taxData?.dividend ?? 0;
+
+    final hasExemptionHarvest = exemptionHarvestAmount > 0;
+    final hasTaxLossHarvest = taxLossHarvestAmount > 0;
+    final hasHighDividend = dividend > 100000;
+
+    final hasOptimization =
+        hasExemptionHarvest || hasTaxLossHarvest || hasHighDividend;
+
     return _surfaceCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -886,53 +1035,106 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
                     ),
                   ),
                 ),
+                if (provider.taxometerLoading)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColor.primary,
+                    ),
+                  ),
               ],
             ),
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 28, 22, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
             child: Column(
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD1FAE5),
-                    shape: BoxShape.circle,
+                if (hasExemptionHarvest)
+                  _optimizationAction(
+                    icon: Icons.eco_outlined,
+                    iconBackground: const Color(0xFFD1FAE5),
+                    iconColor: const Color(0xFF16A34A),
+                    title: 'Exemption Harvesting Opportunity',
+                    description:
+                        'Book ${_formatCurrency(exemptionHarvestAmount)} of unrealized long-term gains to utilize the remaining tax-free limit.',
+                    impact:
+                        'Potential future tax saving: ${_formatCurrency(exemptionSavings)}',
                   ),
-                  child: const Icon(
-                    Icons.check_circle_outline_rounded,
-                    size: 30,
-                    color: Color(0xFF10B981),
+                if (hasExemptionHarvest &&
+                    (hasTaxLossHarvest || hasHighDividend))
+                  const SizedBox(height: 12),
+                if (hasTaxLossHarvest)
+                  _optimizationAction(
+                    icon: Icons.trending_down_rounded,
+                    iconBackground: const Color(0xFFDBEAFE),
+                    iconColor: const Color(0xFF2563EB),
+                    title: 'Tax-Loss Harvesting Available',
+                    description:
+                        'Harvest ${_formatCurrency(taxLossHarvestAmount)} of unrealized short-term losses to offset realized STCG.',
+                    impact:
+                        'Potential current tax reduction: ${_formatCurrency(taxLossSavings)}',
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No immediate optimization\nrequired',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColor.textPrimary,
+                if (hasTaxLossHarvest && hasHighDividend)
+                  const SizedBox(height: 12),
+                if (hasHighDividend)
+                  _optimizationAction(
+                    icon: Icons.warning_amber_rounded,
+                    iconBackground: const Color(0xFFFEF3C7),
+                    iconColor: const Color(0xFFD97706),
+                    title: 'High Dividend Tax Burden',
+                    description:
+                        'Dividend income is ${_formatCurrency(dividend)} and may be taxable at your applicable slab rate.',
+                    impact:
+                        'Review dividend-heavy positions around ex-dates when planning taxable income.',
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'The portfolio is currently operating efficiently based on the latest tax rules. Any tax harvesting or loss offsetting opportunities will appear here automatically.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 9,
-                    height: 1.55,
-                    color: AppColor.textSecondary,
+                if (!hasOptimization) ...[
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD1FAE5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 30,
+                      color: Color(0xFF10B981),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No immediate optimization\nrequired',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColor.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'The portfolio is currently operating efficiently based on the latest tax rules.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      height: 1.55,
+                      color: AppColor.textSecondary,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: provider.taxometerLoading
+                      ? null
+                      : () async {
+                          await provider.refreshTaxometer(context);
+                        },
                   icon: const Icon(Icons.refresh_rounded, size: 14),
                   label: Text(
-                    'Re-evaluate Ledger',
+                    'Re-evaluate Taxometer',
                     style: GoogleFonts.poppins(
                       fontSize: 9,
                       fontWeight: FontWeight.w500,
@@ -957,6 +1159,104 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
         ],
       ),
     );
+  }
+
+  Widget _optimizationAction({
+    required IconData icon,
+    required Color iconBackground,
+    required Color iconColor,
+    required String title,
+    required String description,
+    required String impact,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColor.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: iconBackground,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColor.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: GoogleFonts.poppins(
+                    fontSize: 8.5,
+                    height: 1.45,
+                    color: AppColor.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  impact,
+                  style: GoogleFonts.poppins(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0D9488),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCurrency(num? value) {
+    final amount = value ?? 0;
+    final negative = amount < 0;
+    final rounded = amount.abs().round().toString();
+
+    String formatted;
+
+    if (rounded.length <= 3) {
+      formatted = rounded;
+    } else {
+      final lastThree = rounded.substring(rounded.length - 3);
+      var remaining = rounded.substring(0, rounded.length - 3);
+
+      final groups = <String>[];
+
+      while (remaining.length > 2) {
+        groups.insert(0, remaining.substring(remaining.length - 2));
+
+        remaining = remaining.substring(0, remaining.length - 2);
+      }
+
+      if (remaining.isNotEmpty) {
+        groups.insert(0, remaining);
+      }
+
+      formatted = '${groups.join(',')},$lastThree';
+    }
+
+    return negative ? '₹-$formatted' : '₹$formatted';
   }
 
   Widget _surfaceCard({
@@ -1009,21 +1309,9 @@ class _TaxMeterPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(
-      rect,
-      math.pi,
-      math.pi,
-      false,
-      backgroundPaint,
-    );
+    canvas.drawArc(rect, math.pi, math.pi, false, backgroundPaint);
 
-    canvas.drawArc(
-      rect,
-      math.pi,
-      math.pi * safeProgress,
-      false,
-      progressPaint,
-    );
+    canvas.drawArc(rect, math.pi, math.pi * safeProgress, false, progressPaint);
 
     final tickPaint = Paint()
       ..color = const Color(0xFF94A3B8)

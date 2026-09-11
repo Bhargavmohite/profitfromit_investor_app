@@ -30,6 +30,7 @@ class DashboardResponse {
 class Data {
   String? name;
   int? familyId;
+  String? oldestVoucherDate;
   String? portfolioValue;
   double? xirr;
   String? totalGainLoss;
@@ -52,6 +53,7 @@ class Data {
   Data({
     this.name,
     this.familyId,
+    this.oldestVoucherDate,
     this.portfolioValue,
     this.xirr,
     this.totalGainLoss,
@@ -71,7 +73,11 @@ class Data {
   factory Data.fromJson(Map<String, dynamic> json) => Data(
     name: json["name"]?.toString(),
 
-    familyId: json["family_id"] == null ? null : int.tryParse(json["family_id"].toString()),
+    familyId: json["family_id"] == null
+        ? null
+        : int.tryParse(json["family_id"].toString()),
+
+    oldestVoucherDate: json["oldest_voucher_date"]?.toString(),
 
     portfolioValue: json["portfolio_value"]?.toString(),
 
@@ -116,6 +122,7 @@ class Data {
   Map<String, dynamic> toJson() => {
     "name": name,
     "family_id": familyId,
+    "oldest_voucher_date": oldestVoucherDate,
     "portfolio_value": portfolioValue,
     "xirr": xirr,
     "total_gain_loss": totalGainLoss,

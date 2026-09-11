@@ -23,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-String _getSafeInitial(String? value) {
+  String _getSafeInitial(String? value) {
     final text = (value ?? '').trim();
 
     if (text.isEmpty) {
@@ -69,7 +69,7 @@ String _getSafeInitial(String? value) {
                   Consumer2<UserProvider, FamilyProvider>(
                     builder: (context, userProvider, familyProvider, _) {
                       final name = dashboardData?.name ?? userProvider.name;
-                      final hasFamily =dashboardData?.familyId != null;
+                      final hasFamily = dashboardData?.familyId != null;
 
                       return Container(
                         color: Colors.white,
@@ -1286,19 +1286,76 @@ class _PortfolioCardState extends State<_PortfolioCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Portfolio",
-                style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Portfolio",
+                    maxLines: 1,
+                    style: GoogleFonts.poppins(
+                      fontSize: 23,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white70,
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  if ((dashboard?.oldestVoucherDate ?? '').isNotEmpty)
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.calendar_month_outlined,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+
+                                  const SizedBox(width: 4),
+
+                                  Text(
+                                    "Inception Date :",
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 2),
+
+                            Text(
+                              dashboard?.oldestVoucherDate ?? '',
+                              maxLines: 1,
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                dashboard?.portfolioValue ?? "0",
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
+
               const SizedBox(height: 12),
               Row(
                 children: [
