@@ -2,7 +2,8 @@ name: profit_from_it_investors
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.5+7
+
 
 environment:
   sdk: ^3.11.4
