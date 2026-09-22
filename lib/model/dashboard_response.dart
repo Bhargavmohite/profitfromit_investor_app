@@ -30,9 +30,13 @@ class DashboardResponse {
 class Data {
   String? name;
   int? familyId;
+  int? isFamilyMaster;
+  bool? canSelectFamily;
   String? oldestVoucherDate;
   String? portfolioValue;
   double? xirr;
+  String? todaysGainLoss;
+  double? todaysGainLossPercentage;
   String? totalGainLoss;
   String? unrealised;
   String? realised;
@@ -53,9 +57,13 @@ class Data {
   Data({
     this.name,
     this.familyId,
+    this.isFamilyMaster,
+    this.canSelectFamily,
     this.oldestVoucherDate,
     this.portfolioValue,
     this.xirr,
+    this.todaysGainLoss,
+    this.todaysGainLossPercentage,
     this.totalGainLoss,
     this.unrealised,
     this.realised,
@@ -77,11 +85,27 @@ class Data {
         ? null
         : int.tryParse(json["family_id"].toString()),
 
+    isFamilyMaster:
+        int.tryParse(json["is_family_master"]?.toString() ?? "0") ?? 0,
+
+    canSelectFamily:
+        json["can_select_family"] == true ||
+        json["can_select_family"]?.toString() == "1" ||
+        json["can_select_family"]?.toString().toLowerCase() == "true",
+
     oldestVoucherDate: json["oldest_voucher_date"]?.toString(),
 
     portfolioValue: json["portfolio_value"]?.toString(),
 
     xirr: double.tryParse(json["xirr"]?.toString() ?? "0") ?? 0.0,
+
+    todaysGainLoss: json["todays_gain_loss"]?.toString(),
+
+    todaysGainLossPercentage:
+        double.tryParse(
+          json["todays_gain_loss_percentage"]?.toString() ?? "0",
+        ) ??
+        0.0,
 
     totalGainLoss: json["total_gain_loss"]?.toString(),
 
@@ -122,9 +146,13 @@ class Data {
   Map<String, dynamic> toJson() => {
     "name": name,
     "family_id": familyId,
+    "is_family_master": isFamilyMaster,
+    "can_select_family": canSelectFamily,
     "oldest_voucher_date": oldestVoucherDate,
     "portfolio_value": portfolioValue,
     "xirr": xirr,
+    "todays_gain_loss": todaysGainLoss,
+    "todays_gain_loss_percentage": todaysGainLossPercentage,
     "total_gain_loss": totalGainLoss,
     "unrealised": unrealised,
     "realised": realised,

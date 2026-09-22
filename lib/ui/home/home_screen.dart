@@ -69,7 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   Consumer2<UserProvider, FamilyProvider>(
                     builder: (context, userProvider, familyProvider, _) {
                       final name = dashboardData?.name ?? userProvider.name;
-                      final hasFamily = dashboardData?.familyId != null;
+
+                      // Family selector rule:
+                      // - Master (is_family_master = 1) + family_id => SHOW
+                      // - Non-master / no family_id => HIDE
+                      //
+                      // Do not depend on family_list length here. The family
+                      // list is loaded by the dashboard API and displayed in
+                      // the bottom sheet after the selector is opened.
+                      final hasFamily =
+                          dashboardData?.familyId != null &&
+                          (dashboardData?.isFamilyMaster == 1 ||
+                              dashboardData?.canSelectFamily == true);
 
                       return Container(
                         color: Colors.white,
@@ -1026,6 +1037,10 @@ class _PortfolioCard extends StatefulWidget {
 class _PortfolioCardState extends State<_PortfolioCard> {
   static const List<String> _periods = ['1M', '3M', '1Y', 'MAX'];
 
+  // Chart display selector.
+  // Absolute Value is selected by default to preserve the existing chart.
+  String _chartDisplayMode = 'absolute';
+
   List<FlSpot> _getChartSpots(HomeProvider provider) {
     final values =
         provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
@@ -1109,9 +1124,9 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   Widget _leftTitles(double value, TitleMeta meta) {
     return SideTitleWidget(
       meta: meta,
-      space: 6,
+      space: 0,
       child: SizedBox(
-        width: 48,
+        width: 30,
         child: FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerRight,
@@ -1357,14 +1372,17 @@ class _PortfolioCardState extends State<_PortfolioCard> {
               ),
 
               const SizedBox(height: 12),
+
+              // Portfolio Value + XIRR
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Total Gain/Loss",
+                          "Portfolio Value",
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
@@ -1372,21 +1390,17 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                             color: Colors.white60,
                           ),
                         ),
-
                         const SizedBox(height: 2),
-
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            dashboard?.totalGainLoss ?? "0",
+                            dashboard?.portfolioValue ?? "0",
                             maxLines: 1,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: (dashboard?.totalGainLoss).toAmount() < 0
-                                  ? Colors.red
-                                  : const Color(0xFF69FF8C),
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -1408,9 +1422,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                             color: Colors.white60,
                           ),
                         ),
-
                         const SizedBox(height: 2),
-
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerRight,
@@ -1429,7 +1441,185 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 10),
+
+              // Today's Gain/Loss + Total Gain/Loss
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Today's Gain/Loss",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.white60,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "${dashboard?.todaysGainLoss ?? "0"} "
+                            "(${(dashboard?.todaysGainLossPercentage ?? 0) >= 0 ? '+' : ''}"
+                            "${(dashboard?.todaysGainLossPercentage ?? 0).toStringAsFixed(2)}%)",
+                            maxLines: 1,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: (dashboard?.todaysGainLoss).toAmount() < 0
+                                  ? Colors.red
+                                  : const Color(0xFF69FF8C),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          "Total Gain/Loss",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.white60,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            dashboard?.totalGainLoss ?? "0",
+                            maxLines: 1,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: (dashboard?.totalGainLoss).toAmount() < 0
+                                  ? Colors.red
+                                  : const Color(0xFF69FF8C),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              // NAV (Time-Weighted) / Absolute Value selector
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .18),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(7),
+                        onTap: () {
+                          if (_chartDisplayMode == 'nav') return;
+                          setState(() {
+                            _chartDisplayMode = 'nav';
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _chartDisplayMode == 'nav'
+                                ? Colors.white
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "NAV (Time-Weighted)",
+                              maxLines: 1,
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _chartDisplayMode == 'nav'
+                                    ? AppColor.primary
+                                    : Colors.white70,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(7),
+                        onTap: () {
+                          if (_chartDisplayMode == 'absolute') return;
+                          setState(() {
+                            _chartDisplayMode = 'absolute';
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _chartDisplayMode == 'absolute'
+                                ? Colors.white
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "Absolute Value",
+                              maxLines: 1,
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _chartDisplayMode == 'absolute'
+                                    ? AppColor.primary
+                                    : Colors.white70,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
               Row(
                 children: _periods.map((period) {
                   final selected = provider.chartType == period;
@@ -1504,7 +1694,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                               sideTitles: SideTitles(
                                 showTitles: true,
 
-                                reservedSize: 52,
+                                reservedSize: 32,
 
                                 interval: interval == 0 ? 1 : interval,
 
