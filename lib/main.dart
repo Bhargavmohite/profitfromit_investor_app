@@ -6,6 +6,7 @@ import 'package:profit_from_it_investors/provider/analytics_provider/analytics_p
 import 'package:profit_from_it_investors/provider/authentication/auth_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
@@ -51,6 +52,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => WatchlistProvider()),
         ChangeNotifierProvider(create: (_) => FamilyProvider()),
+        ChangeNotifierProvider(create: (_) => ClientSwitchProvider()),
       ],
       child: const MyApp(),
     ),

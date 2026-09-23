@@ -8,6 +8,7 @@ import 'package:profit_from_it_investors/model/dashboard_response.dart';
 import 'package:profit_from_it_investors/model/logout_response.dart' hide Data;
 import 'package:profit_from_it_investors/model/portfolio_chart_response.dart';
 import 'package:profit_from_it_investors/network/http_request.dart';
+import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/ui/authentication/login_screen/login_screen.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
@@ -33,12 +34,16 @@ class HomeProvider extends ChangeNotifier {
 
   Data? get dashboardData => dashboardResponse?.data;
 
-  List<TopHolding> get topHoldings => dashboardResponse?.data?.topHoldings ?? [];
+  List<TopHolding> get topHoldings =>
+      dashboardResponse?.data?.topHoldings ?? [];
 
   String chartType = "1M";
   PortfolioChartResponse? portfolioChartResponse;
 
-  Future<bool> getDashboard(BuildContext context, {bool isRefresh = false}) async {
+  Future<bool> getDashboard(
+    BuildContext context, {
+    bool isRefresh = false,
+  }) async {
     try {
       if (!isRefresh) {
         _dashboardLoading = true;
@@ -50,10 +55,19 @@ class HomeProvider extends ChangeNotifier {
       }
       dashboardResponse = dashboardResponseFromJson(response.body);
 
-      if (response.statusCode == 200 && dashboardResponse != null && dashboardResponse!.status == 200 && dashboardResponse!.data != null) {
+      if (response.statusCode == 200 &&
+          dashboardResponse != null &&
+          dashboardResponse!.status == 200 &&
+          dashboardResponse!.data != null) {
         if (context.mounted) {
           // await context.read<FamilyProvider>().setFamilyList(dashboardResponse?.data?.familyList ?? []);
-          context.read<FamilyProvider>().setFamilyList(dashboardResponse?.data?.familyList ?? []);
+          context.read<FamilyProvider>().setFamilyList(
+            dashboardResponse?.data?.familyList ?? [],
+          );
+
+          context.read<ClientSwitchProvider>().syncFromDashboard(
+            dashboardResponse?.data,
+          );
         }
         notifyListeners();
         return true;
@@ -76,9 +90,20 @@ class HomeProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshDashboard(BuildContext context, {required bool isRefresh}) async {
+  Future<void> refreshDashboard(
+    BuildContext context, {
+    required bool isRefresh,
+  }) async {
     await getDashboard(context, isRefresh: isRefresh);
     await getPortfolioChart(context, isRefresh: isRefresh);
+  }
+
+  /// Updates only the selected chart period without making an API call.
+  /// Used by the NAV chart because full NAV history already comes from
+  /// the Dashboard API and can be filtered locally in HomeScreen.
+  void updateChartTypeLocally(String period) {
+    chartType = period;
+    notifyListeners();
   }
 
   Future<void> updateChartType(BuildContext context, String period) async {
@@ -88,7 +113,10 @@ class HomeProvider extends ChangeNotifier {
     await getPortfolioChart(context);
   }
 
-  Future<bool> getPortfolioChart(BuildContext context, {bool isRefresh = false}) async {
+  Future<bool> getPortfolioChart(
+    BuildContext context, {
+    bool isRefresh = false,
+  }) async {
     try {
       if (!isRefresh) {
         _portfolioChartLoading = true;
@@ -103,7 +131,10 @@ class HomeProvider extends ChangeNotifier {
       }
       portfolioChartResponse = portfolioChartResponseFromJson(response.body);
 
-      if (response.statusCode == 200 && portfolioChartResponse != null && portfolioChartResponse!.status == 200 && portfolioChartResponse!.data != null) {
+      if (response.statusCode == 200 &&
+          portfolioChartResponse != null &&
+          portfolioChartResponse!.status == 200 &&
+          portfolioChartResponse!.data != null) {
         notifyListeners();
         return true;
       } else {

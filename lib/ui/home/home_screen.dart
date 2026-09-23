@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/dashboard_response.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/app_images.dart';
+import 'package:profit_from_it_investors/utility/client_selection_bottom_sheet.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/family_selection_bottom_sheet.dart';
 import 'package:profit_from_it_investors/ui/home/widgets/net_contribution_tile.dart';
@@ -66,146 +68,231 @@ class _HomeScreenState extends State<HomeScreen> {
           : SafeArea(
               child: Column(
                 children: [
-                  Consumer2<UserProvider, FamilyProvider>(
-                    builder: (context, userProvider, familyProvider, _) {
-                      final name = dashboardData?.name ?? userProvider.name;
+                  Consumer3<UserProvider, FamilyProvider, ClientSwitchProvider>(
+                    builder:
+                        (
+                          context,
+                          userProvider,
+                          familyProvider,
+                          clientSwitchProvider,
+                          _,
+                        ) {
+                          final name = dashboardData?.name ?? userProvider.name;
 
-                      // Family selector rule:
-                      // - Master (is_family_master = 1) + family_id => SHOW
-                      // - Non-master / no family_id => HIDE
-                      //
-                      // Do not depend on family_list length here. The family
-                      // list is loaded by the dashboard API and displayed in
-                      // the bottom sheet after the selector is opened.
-                      final hasFamily =
-                          dashboardData?.familyId != null &&
-                          (dashboardData?.isFamilyMaster == 1 ||
-                              dashboardData?.canSelectFamily == true);
+                          // Family selector rule:
+                          // - Master (is_family_master = 1) + family_id => SHOW
+                          // - Non-master / no family_id => HIDE
+                          //
+                          // Do not depend on family_list length here. The family
+                          // list is loaded by the dashboard API and displayed in
+                          // the bottom sheet after the selector is opened.
+                          final hasFamily =
+                              dashboardData?.familyId != null &&
+                              (dashboardData?.isFamilyMaster == 1 ||
+                                  dashboardData?.canSelectFamily == true);
 
-                      return Container(
-                        color: Colors.white,
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Hello, ${name.isNotEmpty ? name : "User"}',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColor.textPrimary,
-                                    ),
-                                  ),
+                          // Family selector always has priority.
+                          // Switch User is visible only when there is no Family
+                          // selector and the authenticated Client is readonly admin.
+                          final showClientSwitch =
+                              !hasFamily &&
+                              dashboardData?.isReadonlyAdmin == 1 &&
+                              dashboardData?.canSwitchClients == true &&
+                              clientSwitchProvider.canShowSwitchUser;
 
-                                  const SizedBox(height: 4),
-
-                                  Text(
-                                    'Welcome back to Profit From It',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: AppColor.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            if (hasFamily)
-                              InkWell(
-                                borderRadius: BorderRadius.circular(30),
-
-                                onTap: () {
-                                  _showFamilySelection(context);
-                                },
-
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
-                                  ),
-
-                                  decoration: BoxDecoration(
-                                    color: AppColor.primary.withValues(
-                                      alpha: .08,
-                                    ),
-
-                                    borderRadius: BorderRadius.circular(25),
-
-                                    border: Border.all(
-                                      color: AppColor.primary.withValues(
-                                        alpha: .15,
-                                      ),
-                                    ),
-                                  ),
-
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-
+                          return Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      CircleAvatar(
-                                        radius: 14,
-
-                                        backgroundColor: AppColor.primary,
-
-                                        child: Text(
-                                          _getSafeInitial(
-                                            familyProvider
-                                                    .selectedFamily
-                                                    ?.name ??
-                                                name,
-                                          ),
-
-                                          style: GoogleFonts.poppins(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                          ),
+                                      Text(
+                                        'Hello, ${name.isNotEmpty ? name : "User"}',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColor.textPrimary,
                                         ),
                                       ),
 
-                                      const SizedBox(width: 4),
+                                      const SizedBox(height: 4),
 
-                                      ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 90,
+                                      Text(
+                                        'Welcome back to Profit From It',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: AppColor.textSecondary,
                                         ),
-
-                                        child: Text(
-                                          "Family Members",
-
-                                          maxLines: 1,
-
-                                          overflow: TextOverflow.ellipsis,
-
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-
-                                            fontWeight: FontWeight.w600,
-
-                                            color: AppColor.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 4),
-
-                                      const Icon(
-                                        Icons.keyboard_arrow_down_rounded,
-
-                                        size: 20,
-
-                                        color: AppColor.primary,
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+
+                                if (hasFamily)
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(30),
+
+                                    onTap: () {
+                                      _showFamilySelection(context);
+                                    },
+
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+
+                                      decoration: BoxDecoration(
+                                        color: AppColor.primary.withValues(
+                                          alpha: .08,
+                                        ),
+
+                                        borderRadius: BorderRadius.circular(25),
+
+                                        border: Border.all(
+                                          color: AppColor.primary.withValues(
+                                            alpha: .15,
+                                          ),
+                                        ),
+                                      ),
+
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 14,
+
+                                            backgroundColor: AppColor.primary,
+
+                                            child: Text(
+                                              _getSafeInitial(
+                                                familyProvider
+                                                        .selectedFamily
+                                                        ?.name ??
+                                                    name,
+                                              ),
+
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+
+                                          const SizedBox(width: 4),
+
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 90,
+                                            ),
+
+                                            child: Text(
+                                              "Family Members",
+
+                                              maxLines: 1,
+
+                                              overflow: TextOverflow.ellipsis,
+
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10,
+
+                                                fontWeight: FontWeight.w600,
+
+                                                color: AppColor.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+
+                                          const SizedBox(width: 4),
+
+                                          const Icon(
+                                            Icons.keyboard_arrow_down_rounded,
+
+                                            size: 20,
+
+                                            color: AppColor.primary,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                if (showClientSwitch)
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(30),
+                                    onTap: () {
+                                      _showClientSelection(context);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColor.primary.withValues(
+                                          alpha: .08,
+                                        ),
+                                        borderRadius: BorderRadius.circular(25),
+                                        border: Border.all(
+                                          color: AppColor.primary.withValues(
+                                            alpha: .15,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 14,
+                                            backgroundColor: AppColor.primary,
+                                            child: Text(
+                                              _getSafeInitial(
+                                                clientSwitchProvider
+                                                        .selectedClient
+                                                        ?.name ??
+                                                    name,
+                                              ),
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 90,
+                                            ),
+                                            child: Text(
+                                              "Switch User",
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColor.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.keyboard_arrow_down_rounded,
+                                            size: 20,
+                                            color: AppColor.primary,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
                   ),
 
                   Expanded(
@@ -1025,6 +1112,25 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
+
+  Future<void> _showClientSelection(BuildContext context) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const ClientSelectionBottomSheet(),
+    );
+
+    if (changed == true && context.mounted) {
+      await context.read<HomeProvider>().refreshDashboard(
+        context,
+        isRefresh: false,
+      );
+    }
+  }
 }
 
 class _PortfolioCard extends StatefulWidget {
@@ -1038,12 +1144,87 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   static const List<String> _periods = ['1M', '3M', '1Y', 'MAX'];
 
   // Chart display selector.
-  // Absolute Value is selected by default to preserve the existing chart.
-  String _chartDisplayMode = 'absolute';
+  // NAV is shown by default. Absolute Value keeps using the existing chart API.
+  String _chartDisplayMode = 'nav';
+
+  bool get _isNavMode => _chartDisplayMode == 'nav';
+
+  List<int> _getFilteredNavIndexes(HomeProvider provider) {
+    final curve = provider.dashboardData?.portfolioCurve;
+
+    if (curve == null || curve.dates.isEmpty || curve.navValues.isEmpty) {
+      return [];
+    }
+
+    final length = curve.dates.length < curve.navValues.length
+        ? curve.dates.length
+        : curve.navValues.length;
+
+    final parsedDates = <DateTime>[];
+    final originalIndexes = <int>[];
+
+    for (var i = 0; i < length; i++) {
+      final date = DateTime.tryParse(curve.dates[i]);
+      if (date == null) continue;
+
+      parsedDates.add(date);
+      originalIndexes.add(i);
+    }
+
+    if (parsedDates.isEmpty) {
+      return [];
+    }
+
+    if (provider.chartType == 'MAX') {
+      return originalIndexes;
+    }
+
+    final lastDate = parsedDates.last;
+    DateTime cutoff;
+
+    switch (provider.chartType) {
+      case '1M':
+        cutoff = DateTime(lastDate.year, lastDate.month - 1, lastDate.day);
+        break;
+      case '3M':
+        cutoff = DateTime(lastDate.year, lastDate.month - 3, lastDate.day);
+        break;
+      case '1Y':
+        cutoff = DateTime(lastDate.year - 1, lastDate.month, lastDate.day);
+        break;
+      default:
+        return originalIndexes;
+    }
+
+    final filtered = <int>[];
+
+    for (var i = 0; i < parsedDates.length; i++) {
+      if (!parsedDates[i].isBefore(cutoff)) {
+        filtered.add(originalIndexes[i]);
+      }
+    }
+
+    return filtered;
+  }
+
+  List<double> _getChartValues(HomeProvider provider) {
+    if (_isNavMode) {
+      final curve = provider.dashboardData?.portfolioCurve;
+      if (curve == null) return [];
+
+      final indexes = _getFilteredNavIndexes(provider);
+
+      return indexes
+          .where((index) => index >= 0 && index < curve.navValues.length)
+          .map((index) => curve.navValues[index])
+          .toList();
+    }
+
+    return provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
+  }
 
   List<FlSpot> _getChartSpots(HomeProvider provider) {
-    final values =
-        provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
+    final values = _getChartValues(provider);
 
     if (values.isEmpty) {
       return [];
@@ -1056,6 +1237,25 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   }
 
   List<DateTime> _getDates(HomeProvider provider) {
+    if (_isNavMode) {
+      final curve = provider.dashboardData?.portfolioCurve;
+      if (curve == null) return [];
+
+      final indexes = _getFilteredNavIndexes(provider);
+      final dates = <DateTime>[];
+
+      for (final index in indexes) {
+        if (index < 0 || index >= curve.dates.length) continue;
+
+        final date = DateTime.tryParse(curve.dates[index]);
+        if (date != null) {
+          dates.add(date);
+        }
+      }
+
+      return dates;
+    }
+
     return provider.portfolioChartResponse?.data?.chart?.dates ?? [];
   }
 
@@ -1068,6 +1268,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
       if (spot.y < min) {
         min = spot.y;
       }
+    }
+
+    // In NAV mode always keep the Base-100 reference inside the visible range.
+    if (_isNavMode && min > 100) {
+      min = 100;
     }
 
     final padding = (min * .05).abs();
@@ -1084,6 +1289,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
       if (spot.y > max) {
         max = spot.y;
       }
+    }
+
+    // In NAV mode always keep the Base-100 reference inside the visible range.
+    if (_isNavMode && max < 100) {
+      max = 100;
     }
 
     final padding = (max * .05).abs();
@@ -1131,7 +1341,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerRight,
           child: Text(
-            _formatAmount(value),
+            _isNavMode ? value.toStringAsFixed(0) : _formatAmount(value),
             maxLines: 1,
             softWrap: false,
             textAlign: TextAlign.right,
@@ -1173,11 +1383,22 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         break;
 
       case '1Y':
-        show = index % 3 == 0 || index == total - 1;
+        show =
+            index == 0 ||
+            index == total ~/ 4 ||
+            index == total ~/ 2 ||
+            index == (total * 3) ~/ 4 ||
+            index == total - 1;
         break;
 
       default:
-        show = index % 12 == 0 || index == total - 1;
+        // MAX / ALL: keep the axis readable even when NAV has daily points.
+        show =
+            index == 0 ||
+            index == total ~/ 4 ||
+            index == total ~/ 2 ||
+            index == (total * 3) ~/ 4 ||
+            index == total - 1;
     }
 
     if (!show) {
@@ -1202,7 +1423,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         break;
 
       default:
-        text = date.year.toString();
+        text = "${_month(date.month)} ${date.year}";
     }
 
     return SideTitleWidget(
@@ -1579,11 +1800,16 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                     Expanded(
                       child: InkWell(
                         borderRadius: BorderRadius.circular(7),
-                        onTap: () {
+                        onTap: () async {
                           if (_chartDisplayMode == 'absolute') return;
+
                           setState(() {
                             _chartDisplayMode = 'absolute';
                           });
+
+                          // Absolute Value continues to use the existing
+                          // portfolio-chart API for the selected period.
+                          await provider.getPortfolioChart(context);
                         },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
@@ -1628,7 +1854,14 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                     onTap: () {
                       if (provider.chartType == period) return;
 
-                      provider.updateChartType(context, period);
+                      if (_isNavMode) {
+                        // NAV history is already returned by Dashboard API.
+                        // Only change the local period filter.
+                        provider.updateChartTypeLocally(period);
+                      } else {
+                        // Absolute Value keeps using the existing API.
+                        provider.updateChartType(context, period);
+                      }
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
@@ -1643,7 +1876,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        period,
+                        period == 'MAX' ? 'ALL' : period,
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1658,7 +1891,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
 
               SizedBox(
                 height: 220,
-                child: provider.portfolioChartLoading
+                child: (!_isNavMode && provider.portfolioChartLoading)
                     ? const Center(
                         child: CircularProgressIndicator(color: Colors.white),
                       )
@@ -1680,6 +1913,18 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                                 strokeWidth: 1,
                               );
                             },
+                          ),
+                          extraLinesData: ExtraLinesData(
+                            horizontalLines: _isNavMode
+                                ? [
+                                    HorizontalLine(
+                                      y: 100,
+                                      color: Colors.white54,
+                                      strokeWidth: 1,
+                                      dashArray: [6, 4],
+                                    ),
+                                  ]
+                                : const [],
                           ),
                           titlesData: FlTitlesData(
                             topTitles: const AxisTitles(
@@ -1727,7 +1972,9 @@ class _PortfolioCardState extends State<_PortfolioCard> {
 
                                   if (index >= dates.length) {
                                     return LineTooltipItem(
-                                      "₹${spot.y.toStringAsFixed(0)}",
+                                      _isNavMode
+                                          ? "NAV: ${spot.y.toStringAsFixed(2)}"
+                                          : "₹${spot.y.toStringAsFixed(0)}",
                                       GoogleFonts.poppins(
                                         color: Colors.white,
                                         fontSize: 11,
@@ -1740,7 +1987,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                                   // final amount = spot.y.toStringAsFixed(0);
                                   return LineTooltipItem(
                                     "${date.day} ${_month(date.month)} ${date.year}\n"
-                                    "₹${spot.y.toStringAsFixed(0)}",
+                                    "${_isNavMode ? 'NAV: ${spot.y.toStringAsFixed(2)}' : '₹${spot.y.toStringAsFixed(0)}'}",
                                     GoogleFonts.poppins(
                                       color: Colors.white,
                                       fontSize: 11,
