@@ -53,7 +53,10 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: 'Search holdings...', border: InputBorder.none),
+                decoration: const InputDecoration(
+                  hintText: 'Search holdings...',
+                  border: InputBorder.none,
+                ),
                 onChanged: (value) {
                   setState(() {
                     _searchText = value;
@@ -62,12 +65,19 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
               )
             : Text(
                 'Holdings',
-                style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColor.textPrimary),
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColor.textPrimary,
+                ),
               ),
         centerTitle: false,
         actions: [
           IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search, color: AppColor.textPrimary),
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search,
+              color: AppColor.textPrimary,
+            ),
             onPressed: () {
               setState(() {
                 if (_isSearching) {
@@ -98,14 +108,19 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                 children: [
                   SizedBox(
                     height: MediaQuery.of(context).size.height * 0.7,
-                    child: Center(child: Text("No data found", style: GoogleFonts.poppins())),
+                    child: Center(
+                      child: Text(
+                        "No data found",
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
                   ),
                 ],
               ),
             );
           }
 
-final holdings = provider.holdings;
+          final holdings = provider.holdings;
 
           // ==============================================
           // SEARCH QUERY
@@ -154,14 +169,27 @@ final holdings = provider.holdings;
               // Total Summary
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total Holdings (${activeHoldings.length})', style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textSecondary)),
+                    Text(
+                      'Total Holdings (${activeHoldings.length})',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: AppColor.textSecondary,
+                      ),
+                    ),
                     Text(
                       provider.totalInvested,
-                      style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: AppColor.textPrimary),
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColor.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -180,7 +208,12 @@ final holdings = provider.holdings;
                             SizedBox(
                               height: MediaQuery.of(context).size.height * 0.55,
                               child: Center(
-                                child: Text('No holdings found', style: GoogleFonts.poppins(color: AppColor.textSecondary)),
+                                child: Text(
+                                  'No holdings found',
+                                  style: GoogleFonts.poppins(
+                                    color: AppColor.textSecondary,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -195,7 +228,14 @@ final holdings = provider.holdings;
                             return _HoldingTile(
                               holding: holding,
                               onTap: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => StockDetailScreen(stockId: holding.id ?? '')));
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => StockDetailScreen(
+                                      stockId: holding.id ?? '',
+                                    ),
+                                  ),
+                                );
                               },
                             );
                           },
@@ -216,7 +256,9 @@ final holdings = provider.holdings;
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) {
         return HoldingsSortBottomSheet(
           selectedSort: _selectedSort,
@@ -242,11 +284,19 @@ final holdings = provider.holdings;
   void _applySorting(List<Holding> list) {
     switch (_selectedSort) {
       case HoldingSortType.alphabeticalAsc:
-        list.sort((a, b) => (a.assetName?.toLowerCase() ?? '').compareTo(b.assetName?.toLowerCase() ?? ''));
+        list.sort(
+          (a, b) => (a.assetName?.toLowerCase() ?? '').compareTo(
+            b.assetName?.toLowerCase() ?? '',
+          ),
+        );
         break;
 
       case HoldingSortType.alphabeticalDesc:
-        list.sort((a, b) => (b.assetName?.toLowerCase() ?? '').compareTo(a.assetName?.toLowerCase() ?? ''));
+        list.sort(
+          (a, b) => (b.assetName?.toLowerCase() ?? '').compareTo(
+            a.assetName?.toLowerCase() ?? '',
+          ),
+        );
         break;
 
       case HoldingSortType.percentHighToLow:
@@ -276,11 +326,17 @@ final holdings = provider.holdings;
         break;
 
       case HoldingSortType.investedHighToLow:
-        list.sort((a, b) => b.investedValue.toAmount().compareTo(a.investedValue.toAmount()));
+        list.sort(
+          (a, b) =>
+              b.investedValue.toAmount().compareTo(a.investedValue.toAmount()),
+        );
         break;
 
       case HoldingSortType.investedLowToHigh:
-        list.sort((a, b) => a.investedValue.toAmount().compareTo(b.investedValue.toAmount()));
+        list.sort(
+          (a, b) =>
+              a.investedValue.toAmount().compareTo(b.investedValue.toAmount()),
+        );
         break;
       case null:
         break;
@@ -304,147 +360,223 @@ class _HoldingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final gainPercent = holding.gainPercent ?? 0;
     final isGain = gainPercent >= 0;
-
-    final gainColor = isGain ? AppColor.gainText : AppColor.lossText;
+    final gainColor = isGain
+        ? const Color(0xFF009B72)
+        : const Color(0xFFE53935);
 
     final todayPercent = holding.todaysPercentage ?? 0;
-
     final isTodayGain = todayPercent >= 0;
+    final todayColor = isTodayGain
+        ? const Color(0xFF009B72)
+        : const Color(0xFFE53935);
 
-    final todayColor = isTodayGain ? AppColor.gainText : AppColor.lossText;
+    final assetName = (holding.assetName ?? '').trim();
+    final initials = getInitials(assetName);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 14, offset: const Offset(0, 5))],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE6EBF2), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .045),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              /// Left Indicator
-              Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  color: gainColor,
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(25), bottomLeft: Radius.circular(25)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Company name + overall gain/loss percentage
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColor.primary,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  alignment: Alignment.center,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        initials,
+                        maxLines: 1,
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
 
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8, right: 6, top: 8, bottom: 8),
+                const SizedBox(width: 9),
+
+                Expanded(
+                  child: Text(
+                    assetName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColor.textPrimary,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: gainColor.withValues(alpha: .09),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      /// Avatar
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(color: gainColor.withValues(alpha: .10), borderRadius: BorderRadius.circular(14)),
-                        alignment: Alignment.center,
-                        child: Text(
-                          getInitials(holding.assetName ?? ''),
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: gainColor),
+                      Text(
+                        '${isGain ? '+' : '-'}${gainPercent.abs().toStringAsFixed(1)}%',
+                        style: GoogleFonts.poppins(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w700,
+                          color: gainColor,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      /// Left Section
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              holding.assetName ?? '',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            Text("Today's Gain", style: GoogleFonts.poppins(fontSize: 10, color: AppColor.textSecondary)),
-
-                            const SizedBox(height: 6),
-
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                if ((holding.todays ?? "").isNotEmpty) _gainChip(value: holding.todays!, color: todayColor),
-
-                                if (holding.todaysPercentage != 0.0) _gainChip(value: "${todayPercent.toStringAsFixed(2)}%", color: todayColor),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(width: 1, color: Colors.grey.shade300, margin: const EdgeInsets.symmetric(vertical: 4)),
-                      const SizedBox(width: 8),
-                      /// Right Values
-                      SizedBox(
-                        width: 65,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text("Invested", style: GoogleFonts.poppins(fontSize: 9, color: AppColor.textSecondary)),
-
-                            const SizedBox(height: 2),
-
-                            Text(holding.investedValue ?? "", style: GoogleFonts.poppins(color: AppColor.black, fontWeight: FontWeight.w600, fontSize: 10)),
-
-                            const SizedBox(height: 6),
-
-                            Text("Current", style: GoogleFonts.poppins(fontSize: 9, color: AppColor.textSecondary)),
-
-                            const SizedBox(height: 2),
-
-                            Text(holding.currentValue ?? "", style: GoogleFonts.poppins(color: AppColor.black, fontWeight: FontWeight.w600, fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      /// Percentage
-                      SizedBox(
-                        width: 48,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(isGain ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: gainColor, size: 20),
-
-                            Text(
-                              "${gainPercent.abs().toStringAsFixed(2)}%",
-                              style: GoogleFonts.poppins(color: gainColor, fontWeight: FontWeight.w700, fontSize: 10),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        isGain
+                            ? Icons.arrow_drop_up_rounded
+                            : Icons.arrow_drop_down_rounded,
+                        size: 14,
+                        color: gainColor,
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+
+            const SizedBox(height: 9),
+
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF0F2F6)),
+
+            const SizedBox(height: 9),
+
+            // Today's P&L / Invested / Current Value
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _valueColumn(
+                    label: "Today's P&L",
+                    value: (holding.todays ?? '').isNotEmpty
+                        ? holding.todays!
+                        : '-',
+                    valueColor: todayColor,
+                    subValue:
+                        '${todayPercent >= 0 ? '+' : ''}${todayPercent.toStringAsFixed(2)}%',
+                    subColor: todayColor,
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                Expanded(
+                  child: _valueColumn(
+                    label: 'Invested',
+                    value: (holding.investedValue ?? '').isNotEmpty
+                        ? holding.investedValue!
+                        : '-',
+                    valueColor: AppColor.textPrimary,
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                Expanded(
+                  child: _valueColumn(
+                    label: 'Current Value',
+                    value: (holding.currentValue ?? '').isNotEmpty
+                        ? holding.currentValue!
+                        : '-',
+                    valueColor: AppColor.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _gainChip({required String value, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(6)),
-      child: Text(
-        value,
-        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-      ),
+  Widget _valueColumn({
+    required String label,
+    required String value,
+    required Color valueColor,
+    String? subValue,
+    Color? subColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.poppins(
+            fontSize: 7.5,
+            fontWeight: FontWeight.w500,
+            color: AppColor.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 3),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
+        ),
+        if ((subValue ?? '').isNotEmpty) ...[
+          const SizedBox(height: 1),
+          Text(
+            subValue!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 7.5,
+              fontWeight: FontWeight.w500,
+              color: subColor ?? AppColor.textSecondary,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
