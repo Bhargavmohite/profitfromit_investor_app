@@ -13,6 +13,18 @@ class ClientSelectionBottomSheet extends StatelessWidget {
 
     return Consumer<ClientSwitchProvider>(
       builder: (context, provider, child) {
+        final isPartner = provider.isPartner;
+
+        final sheetTitle = isPartner ? 'Switch Member' : 'Switch User';
+
+        final sheetSubtitle = isPartner
+            ? 'Select one of your linked client accounts to view'
+            : 'Select the client account you want to view';
+
+        final emptyMessage = isPartner
+            ? 'No linked client accounts found.'
+            : 'No client accounts found.';
+
         return SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: screenHeight * 0.75),
@@ -31,7 +43,7 @@ class ClientSelectionBottomSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    "Switch User",
+                    sheetTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -42,7 +54,7 @@ class ClientSelectionBottomSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "Select the client account you want to view",
+                    sheetSubtitle,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       fontSize: 12,
@@ -54,7 +66,7 @@ class ClientSelectionBottomSheet extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(
-                        "No client accounts found.",
+                        emptyMessage,
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           fontSize: 14,

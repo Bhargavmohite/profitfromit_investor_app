@@ -10,6 +10,8 @@ import 'package:profit_from_it_investors/provider/client_switch/client_switch_pr
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
+import 'package:profit_from_it_investors/provider/net_contribution_provider/net_contribution_provider.dart';
+import 'package:profit_from_it_investors/provider/dividend_provider/dividend_provider.dart';
 import 'package:profit_from_it_investors/provider/stock_detail/stock_detail_provider.dart';
 import 'package:profit_from_it_investors/provider/taxometer/taxometer_provider.dart';
 import 'package:profit_from_it_investors/provider/transaction_provider/transaction_provider.dart';
@@ -53,6 +55,8 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => WatchlistProvider()),
         ChangeNotifierProvider(create: (_) => FamilyProvider()),
         ChangeNotifierProvider(create: (_) => ClientSwitchProvider()),
+        ChangeNotifierProvider(create: (_) => NetContributionProvider()),
+        ChangeNotifierProvider(create: (_) => DividendProvider()),
       ],
       child: const MyApp(),
     ),

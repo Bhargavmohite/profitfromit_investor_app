@@ -17,6 +17,8 @@ class CMD {
   static const String otpReSend = "otp-resend";
   static const String getProfile = "profile";
   static const String dashboard = "dashboard";
+  static const String netContributionDetails = "net-contribution-details";
+  static const String dividendDetails = "dividend-details";
   static const String clientImpersonate = "client/impersonate";
   static const String clientImpersonateStop = "client/impersonate/stop";
   static const String stockDetail = "stock-detail";

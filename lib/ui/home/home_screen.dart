@@ -8,12 +8,12 @@ import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
 import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
+import 'package:profit_from_it_investors/ui/net_contribution/net_contribution_screen.dart';
+import 'package:profit_from_it_investors/ui/dividend/dividend_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
-import 'package:profit_from_it_investors/utility/app_images.dart';
 import 'package:profit_from_it_investors/utility/client_selection_bottom_sheet.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/family_selection_bottom_sheet.dart';
-import 'package:profit_from_it_investors/ui/home/widgets/net_contribution_tile.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -119,204 +119,279 @@ class _HomeScreenState extends State<HomeScreen> {
                               (dashboardData?.isFamilyMaster == 1 ||
                                   dashboardData?.canSelectFamily == true);
 
-                          // Family selector always has priority.
-                          // Switch User is visible only when there is no Family
-                          // selector and the authenticated Client is readonly admin.
-                          final showClientSwitch =
-                              !hasFamily &&
-                              dashboardData?.isReadonlyAdmin == 1 &&
+                          // Family selector keeps its existing priority.
+                          //
+                          // Supported client-switch modes:
+                          //
+                          // 1) Readonly Admin Client
+                          //    ctype = Client + is_readonly_admin = 1
+                          //    -> show "Switch User"
+                          //
+                          // 2) Partner
+                          //    ctype = Partner
+                          //    -> show "Switch Member"
+                          //
+                          // 3) Normal Client
+                          //    -> no switching option
+                          final accountCtype = (dashboardData?.ctype ?? '')
+                              .trim()
+                              .toLowerCase();
+
+                          final isPartner = accountCtype == 'partner';
+
+                          final isReadonlyAdminClient =
+                              accountCtype == 'client' &&
+                              dashboardData?.isReadonlyAdmin == 1;
+
+                          // Switching permissions are independent from Family
+                          // Master permission. If an account is both Family
+                          // Master and Partner/Readonly Admin, show BOTH controls.
+                          final showPartnerSwitch =
+                              isPartner &&
+                              dashboardData?.canSwitchClients == true &&
+                              clientSwitchProvider.canShowSwitchMember;
+
+                          final showReadonlyAdminSwitch =
+                              isReadonlyAdminClient &&
                               dashboardData?.canSwitchClients == true &&
                               clientSwitchProvider.canShowSwitchUser;
 
+                          final showClientSwitch =
+                              showPartnerSwitch || showReadonlyAdminSwitch;
+
+                          final clientSwitchLabel = showPartnerSwitch
+                              ? 'Switch Member'
+                              : 'Switch User';
+
+                          // Time-based greeting using device local time.
+                          final currentHour = DateTime.now().hour;
+
+                          final String greeting;
+                          if (currentHour >= 6 && currentHour < 12) {
+                            greeting = 'Good Morning';
+                          } else if (currentHour >= 12 && currentHour < 17) {
+                            greeting = 'Good Afternoon';
+                          } else if (currentHour >= 17 && currentHour < 19) {
+                            greeting = 'Good Evening';
+                          } else {
+                            greeting = 'Hello';
+                          }
+
                           return Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                            child: Row(
+                            width: double.infinity,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Color(0xFFF0F2F6),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Hello, ${name.isNotEmpty ? name : "User"}',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColor.textPrimary,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height: 4),
-
-                                      Text(
-                                        'Welcome back to Profit From It',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: AppColor.textSecondary,
-                                        ),
-                                      ),
-                                    ],
+                                Text(
+                                  '$greeting, ${name.isNotEmpty ? name : "User"}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColor.textPrimary,
+                                    height: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Welcome to Profit From It',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                    color: AppColor.textSecondary,
                                   ),
                                 ),
 
-                                if (hasFamily)
-                                  InkWell(
-                                    borderRadius: BorderRadius.circular(30),
+                                if (hasFamily || showClientSwitch) ...[
+                                  const SizedBox(height: 14),
 
-                                    onTap: () {
-                                      _showFamilySelection(context);
-                                    },
-
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-
-                                      decoration: BoxDecoration(
-                                        color: AppColor.primary.withValues(
-                                          alpha: .08,
+                                  // Family and client switching stay on one line.
+                                  Row(
+                                    children: [
+                                      if (hasFamily)
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            onTap: () {
+                                              _showFamilySelection(context);
+                                            },
+                                            child: Container(
+                                              height: 46,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 9,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF6F8FC),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFDDE4EF,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 28,
+                                                    height: 28,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                          color: Color(
+                                                            0xFF0D4CC9,
+                                                          ),
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      _getSafeInitial(
+                                                        familyProvider
+                                                                .selectedFamily
+                                                                ?.name ??
+                                                            name,
+                                                      ),
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            color: Colors.white,
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 7),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Family Members',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 10.5,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const Icon(
+                                                    Icons
+                                                        .keyboard_arrow_down_rounded,
+                                                    size: 18,
+                                                    color: Color(0xFF66758B),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
                                         ),
 
-                                        borderRadius: BorderRadius.circular(25),
+                                      if (hasFamily && showClientSwitch)
+                                        const SizedBox(width: 8),
 
-                                        border: Border.all(
-                                          color: AppColor.primary.withValues(
-                                            alpha: .15,
+                                      if (showClientSwitch)
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            onTap: () {
+                                              _showClientSelection(context);
+                                            },
+                                            child: Container(
+                                              height: 46,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 9,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF6F8FC),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFDDE4EF,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 28,
+                                                    height: 28,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                          color: Color(
+                                                            0xFF082D59,
+                                                          ),
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      _getSafeInitial(
+                                                        clientSwitchProvider
+                                                                .selectedClient
+                                                                ?.name ??
+                                                            name,
+                                                      ),
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            color: Colors.white,
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 7),
+                                                  Expanded(
+                                                    child: Text(
+                                                      clientSwitchLabel,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 10.5,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const Icon(
+                                                    Icons
+                                                        .keyboard_arrow_down_rounded,
+                                                    size: 18,
+                                                    color: Color(0xFF66758B),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 14,
-
-                                            backgroundColor: AppColor.primary,
-
-                                            child: Text(
-                                              _getSafeInitial(
-                                                familyProvider
-                                                        .selectedFamily
-                                                        ?.name ??
-                                                    name,
-                                              ),
-
-                                              style: GoogleFonts.poppins(
-                                                color: Colors.white,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-
-                                          const SizedBox(width: 4),
-
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 90,
-                                            ),
-
-                                            child: Text(
-                                              "Family Members",
-
-                                              maxLines: 1,
-
-                                              overflow: TextOverflow.ellipsis,
-
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 10,
-
-                                                fontWeight: FontWeight.w600,
-
-                                                color: AppColor.textPrimary,
-                                              ),
-                                            ),
-                                          ),
-
-                                          const SizedBox(width: 4),
-
-                                          const Icon(
-                                            Icons.keyboard_arrow_down_rounded,
-
-                                            size: 20,
-
-                                            color: AppColor.primary,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                                    ],
                                   ),
-
-                                if (showClientSwitch)
-                                  InkWell(
-                                    borderRadius: BorderRadius.circular(30),
-                                    onTap: () {
-                                      _showClientSelection(context);
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColor.primary.withValues(
-                                          alpha: .08,
-                                        ),
-                                        borderRadius: BorderRadius.circular(25),
-                                        border: Border.all(
-                                          color: AppColor.primary.withValues(
-                                            alpha: .15,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 14,
-                                            backgroundColor: AppColor.primary,
-                                            child: Text(
-                                              _getSafeInitial(
-                                                clientSwitchProvider
-                                                        .selectedClient
-                                                        ?.name ??
-                                                    name,
-                                              ),
-                                              style: GoogleFonts.poppins(
-                                                color: Colors.white,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 90,
-                                            ),
-                                            child: Text(
-                                              "Switch User",
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColor.textPrimary,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          const Icon(
-                                            Icons.keyboard_arrow_down_rounded,
-                                            size: 20,
-                                            color: AppColor.primary,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                ],
                               ],
                             ),
                           );
@@ -601,156 +676,203 @@ class _HomeScreenState extends State<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 120,
-                                    ),
-                                    padding: const EdgeInsets.all(13),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF9E8),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: const Color(0xFFFFD98A),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const DividendScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 120,
                                       ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                              0xFFB66A00,
-                                            ).withValues(alpha: .10),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
+                                      padding: const EdgeInsets.all(13),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFF9E8),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: const Color(0xFFFFD98A),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: 32,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              color: const Color(
+                                                0xFFB66A00,
+                                              ).withValues(alpha: .10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(
+                                              Icons.currency_rupee_rounded,
+                                              size: 18,
+                                              color: Color(0xFFB66A00),
                                             ),
                                           ),
-                                          child: const Icon(
-                                            Icons.currency_rupee_rounded,
-                                            size: 18,
-                                            color: Color(0xFFB66A00),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                          'Dividend Income',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            homeProvider
-                                                    .dashboardData
-                                                    ?.dividend ??
-                                                '-',
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            'Dividend Income',
                                             maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                             style: GoogleFonts.poppins(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF9C5200),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColor.textSecondary,
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Dividend received',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            color: AppColor.textSecondary,
+                                          const SizedBox(height: 2),
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              homeProvider
+                                                      .dashboardData
+                                                      ?.dividend ??
+                                                  '-',
+                                              maxLines: 1,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFF9C5200),
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'Dividend received',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    color:
+                                                        AppColor.textSecondary,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.arrow_forward_ios_rounded,
+                                                size: 10,
+                                                color: Color(0xFF9C5200),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 120,
-                                    ),
-                                    padding: const EdgeInsets.all(13),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF0F6FF),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: const Color(0xFFBDD6FF),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const NetContributionScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 120,
                                       ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color: AppColor.primary.withValues(
-                                              alpha: .10,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons
-                                                .account_balance_wallet_outlined,
-                                            size: 18,
-                                            color: AppColor.primary,
-                                          ),
+                                      padding: const EdgeInsets.all(13),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF0F6FF),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: const Color(0xFFBDD6FF),
                                         ),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                          'Net Contribution',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            homeProvider
-                                                    .dashboardData
-                                                    ?.netContribution ??
-                                                '-',
-                                            maxLines: 1,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: 32,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              color: AppColor.primary
+                                                  .withValues(alpha: .10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(
+                                              Icons
+                                                  .account_balance_wallet_outlined,
+                                              size: 18,
                                               color: AppColor.primary,
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Net capital contribution',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            color: AppColor.textSecondary,
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            'Net Contribution',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColor.textSecondary,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 2),
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              homeProvider
+                                                      .dashboardData
+                                                      ?.netContribution ??
+                                                  '-',
+                                              maxLines: 1,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColor.primary,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'Net capital contribution',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    color:
+                                                        AppColor.textSecondary,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.arrow_forward_ios_rounded,
+                                                size: 10,
+                                                color: AppColor.primary,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),

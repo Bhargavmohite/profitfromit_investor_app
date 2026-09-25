@@ -6,6 +6,9 @@ class ClientSwitchProvider extends ChangeNotifier {
   List<ClientList> _clientList = [];
   ClientList? _selectedClient;
 
+  String _ctype = '';
+  int? _partnerId;
+
   int _isReadonlyAdmin = 0;
   bool _canSwitchClients = false;
   int? _masterClientId;
@@ -16,6 +19,9 @@ class ClientSwitchProvider extends ChangeNotifier {
 
   List<ClientList> get clientList => _clientList;
   ClientList? get selectedClient => _selectedClient;
+  String get ctype => _ctype;
+  int? get partnerId => _partnerId;
+
   int get isReadonlyAdmin => _isReadonlyAdmin;
   bool get canSwitchClients => _canSwitchClients;
   int? get masterClientId => _masterClientId;
@@ -24,14 +30,33 @@ class ClientSwitchProvider extends ChangeNotifier {
   bool get isSwitching => _isSwitching;
   int? get switchingClientId => _switchingClientId;
 
+  bool get isPartner => _ctype.trim().toLowerCase() == 'partner';
+
+  /// Preserve the OLD readonly-admin rule exactly:
+  /// readonly admin was a Client account with is_readonly_admin = 1.
+  bool get isReadonlyAdminClient =>
+      _ctype.trim().toLowerCase() == 'client' && _isReadonlyAdmin == 1;
+
+  /// PARTNER flow:
+  /// Partner can see only the client list returned by the backend.
+  bool get canShowSwitchMember =>
+      isPartner && _canSwitchClients && _clientList.isNotEmpty;
+
+  /// OLD READONLY ADMIN flow:
+  /// Keep the existing "Switch User" behavior.
   bool get canShowSwitchUser =>
-      _isReadonlyAdmin == 1 && _canSwitchClients && _clientList.isNotEmpty;
+      isReadonlyAdminClient && _canSwitchClients && _clientList.isNotEmpty;
+
+  /// Used internally when either switching mode is allowed.
+  bool get canShowAnyClientSwitch => canShowSwitchMember || canShowSwitchUser;
 
   /// Called after Dashboard API.
   ///
   /// Dashboard is the source of truth for:
-  /// - readonly-admin permission
-  /// - master client
+  /// - logged-in account ctype
+  /// - partner relationship
+  /// - switch permission
+  /// - master/partner account
   /// - active client
   /// - allowed client list
   void syncFromDashboard(Data? data) {
@@ -40,6 +65,9 @@ class ClientSwitchProvider extends ChangeNotifier {
       return;
     }
 
+    _ctype = data.ctype ?? '';
+    _partnerId = data.partnerId;
+
     _isReadonlyAdmin = data.isReadonlyAdmin ?? 0;
     _canSwitchClients = data.canSwitchClients == true;
     _masterClientId = data.masterClientId;
@@ -47,7 +75,7 @@ class ClientSwitchProvider extends ChangeNotifier {
     _isClientImpersonating = data.isClientImpersonating == true;
     _clientList = data.clientList ?? <ClientList>[];
 
-    if (!canShowSwitchUser) {
+    if (!canShowAnyClientSwitch) {
       _selectedClient = null;
       notifyListeners();
       return;
@@ -99,7 +127,12 @@ class ClientSwitchProvider extends ChangeNotifier {
       return false;
     }
 
-    if (_isReadonlyAdmin != 1 || !_canSwitchClients) {
+    // Allow BOTH supported switching modes:
+    // 1) Partner -> assigned clients
+    // 2) Readonly Admin Client -> existing allowed client list
+    //
+    // A normal Client satisfies neither condition.
+    if (!canShowAnyClientSwitch) {
       return false;
     }
 
@@ -160,6 +193,8 @@ class ClientSwitchProvider extends ChangeNotifier {
   void clear({bool notify = true}) {
     _clientList = [];
     _selectedClient = null;
+    _ctype = '';
+    _partnerId = null;
     _isReadonlyAdmin = 0;
     _canSwitchClients = false;
     _masterClientId = null;

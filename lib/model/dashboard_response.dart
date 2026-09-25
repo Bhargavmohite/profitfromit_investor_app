@@ -29,6 +29,11 @@ class DashboardResponse {
 
 class Data {
   String? name;
+
+  // Logged-in account relationship
+  String? ctype;
+  int? partnerId;
+
   int? familyId;
   int? isFamilyMaster;
   bool? canSelectFamily;
@@ -68,6 +73,8 @@ class Data {
 
   Data({
     this.name,
+    this.ctype,
+    this.partnerId,
     this.familyId,
     this.isFamilyMaster,
     this.canSelectFamily,
@@ -99,6 +106,12 @@ class Data {
 
   factory Data.fromJson(Map<String, dynamic> json) => Data(
     name: json["name"]?.toString(),
+
+    ctype: json["ctype"]?.toString(),
+
+    partnerId: json["partner_id"] == null
+        ? null
+        : int.tryParse(json["partner_id"].toString()),
 
     familyId: json["family_id"] == null
         ? null
@@ -195,6 +208,8 @@ class Data {
 
   Map<String, dynamic> toJson() => {
     "name": name,
+    "ctype": ctype,
+    "partner_id": partnerId,
     "family_id": familyId,
     "is_family_master": isFamilyMaster,
     "can_select_family": canSelectFamily,

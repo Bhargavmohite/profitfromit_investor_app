@@ -230,7 +230,7 @@ class _MoverListPage extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, index) {
         final item = items[index];
 

@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:profit_from_it_investors/provider/authentication/auth_provider.dart';
 import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
-import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 
 import 'package:provider/provider.dart';
