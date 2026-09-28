@@ -107,50 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   const SizedBox(height: 10),
 
                                   Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColor.primary.withValues(
-                                          alpha: .07,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: AppColor.primary.withValues(
-                                            alpha: .14,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 5,
-                                            height: 5,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF00A67A),
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 5),
-                                          Text(
-                                            'SEBI RIA INA000020651',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF27364B),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 18),
-
-                                  Center(
                                     child: Text(
                                       'Welcome Back',
                                       style: GoogleFonts.poppins(

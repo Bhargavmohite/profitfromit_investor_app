@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/provider/app_update_provider/app_update_provider.dart';
+import 'package:profit_from_it_investors/ui/app_update/app_update_prompt.dart';
 import 'package:profit_from_it_investors/ui/authentication/login_screen/login_screen.dart';
 import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
@@ -18,7 +20,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -26,11 +29,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _controller.forward();
 
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    _controller.forward();
     _navigateUser();
   }
 
@@ -50,10 +62,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           child: Column(
             children: [
               const Spacer(flex: 2),
+
               Container(
                 alignment: Alignment.topCenter,
                 decoration: const BoxDecoration(color: Colors.white),
-                child: Image.asset(AppImages.newLogo, fit: BoxFit.fitWidth, width: 220),
+                child: Image.asset(
+                  AppImages.newLogo,
+                  fit: BoxFit.fitWidth,
+                  width: 220,
+                ),
               ),
 
               const Spacer(flex: 2),
@@ -64,16 +81,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   children: [
                     Text(
                       'Smart Investments',
-                      style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600, color: AppColor.textPrimary),
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.textPrimary,
+                      ),
                     ),
                     Text(
                       'Better Tomorrow',
-                      style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColor.primary),
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColor.primary,
+                      ),
                     ),
                     const SizedBox(height: 40),
                   ],
                 ),
               ),
+
               const SizedBox(height: 32),
             ],
           ),
@@ -82,23 +108,65 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 
-Future<void> _navigateUser() async {
+  Future<void> _navigateUser() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    final accessToken = await LocalStorage.getAccessToken();
+    final appUpdateProvider = Provider.of<AppUpdateProvider>(
+      context,
+      listen: false,
+    );
 
+    final accessToken = await LocalStorage.getAccessToken();
     final userId = await LocalStorage.getId();
 
-    await Future.delayed(const Duration(milliseconds: 2500));
+    // Check version during the normal splash duration.
+    await Future.wait([
+      Future.delayed(const Duration(milliseconds: 2500)),
+      appUpdateProvider.checkForUpdate(),
+    ]);
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
-    // User is considered logged in only after OTP
-    // verification has successfully stored BOTH values.
+    // ---------------------------------------------------------------
+    // Mandatory update
+    // ---------------------------------------------------------------
+    if (appUpdateProvider.isMandatoryUpdate) {
+      nextRoute(
+        MaterialPageRoute(
+          builder: (context) => const AppUpdateRequiredScreen(),
+        ),
+        isClearBackRoutes: true,
+      );
+      return;
+    }
+
+    // ---------------------------------------------------------------
+    // Optional update
+    // ---------------------------------------------------------------
+    // User requested:
+    // - Update Now -> open Play Store / App Store.
+    // - Maybe Later -> close the app.
+    //
+    // Therefore we do NOT continue to Login/Dashboard after the
+    // optional update dialog is dismissed.
+    if (appUpdateProvider.isOptionalUpdate) {
+      await AppUpdatePrompt.showOptional(context);
+      return;
+    }
+
+    // ---------------------------------------------------------------
+    // Normal authentication flow
+    // ---------------------------------------------------------------
     final isVerifiedLogin = accessToken.isNotEmpty && userId.isNotEmpty;
 
     if (isVerifiedLogin) {
       await userProvider.loadUserInfo();
+
+      if (!mounted) {
+        return;
+      }
 
       nextRoute(
         MaterialPageRoute(builder: (context) => const DashboardScreen()),

@@ -67,27 +67,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final homeProvider = context.watch<HomeProvider>();
-    final holdingsProvider = context.watch<HoldingsProvider>();
     final dashboardData = homeProvider.dashboardData;
 
-    // HOME SUMMARY COUNT RULE:
-    // 1) Ignore holdings where net_quantity <= 0.
-    // 2) Gainer = active holding with gain_percent > 0.
-    // 3) Loser  = active holding with gain_percent < 0.
-    // 4) gain_percent == 0 is counted in neither group.
-    final activeHoldings = holdingsProvider.holdings
-        .where((holding) => (holding.netQuantity ?? 0) > 0)
-        .toList();
-
-    final activeGainers = activeHoldings
-        .where((holding) => (holding.gainPercent ?? 0) > 0)
-        .length;
-
-    final activeLosers = activeHoldings
-        .where((holding) => (holding.gainPercent ?? 0) < 0)
-        .length;
-
-    final hasHoldingsData = holdingsProvider.holdingsResponse != null;
+    // IMPORTANT:
+    // Holdings / Gainers / Losers must come from the SAME Dashboard response.
+    //
+    // Previously:
+    // - Holdings came from Dashboard API.
+    // - Gainers / Losers came from HoldingsProvider.
+    //
+    // During user switching, Dashboard could already contain the NEW client
+    // while HoldingsProvider still contained the OLD client's holdings. That
+    // produced mixed counts such as 60 Holdings but 25 + 42 = 67.
+    //
+    // The backend now calculates all three counts from the same ACTIVE holdings
+    // collection, so Home should render those atomic Dashboard values directly.
 
     return Scaffold(
       backgroundColor: AppColor.background,
@@ -976,12 +970,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         const SizedBox(height: 5),
                                         Text(
-                                          hasHoldingsData
-                                              ? activeGainers.toString()
-                                              : (homeProvider
-                                                        .dashboardData
-                                                        ?.totalGainer ??
-                                                    '-'),
+                                          homeProvider
+                                                  .dashboardData
+                                                  ?.totalGainer ??
+                                              '-',
                                           maxLines: 1,
                                           style: GoogleFonts.poppins(
                                             fontSize: 17,
@@ -1028,12 +1020,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         const SizedBox(height: 5),
                                         Text(
-                                          hasHoldingsData
-                                              ? activeLosers.toString()
-                                              : (homeProvider
-                                                        .dashboardData
-                                                        ?.totalLoser ??
-                                                    '-'),
+                                          homeProvider
+                                                  .dashboardData
+                                                  ?.totalLoser ??
+                                              '-',
                                           maxLines: 1,
                                           style: GoogleFonts.poppins(
                                             fontSize: 17,
@@ -1410,24 +1400,53 @@ class _PortfolioCardState extends State<_PortfolioCard> {
     return value.toStringAsFixed(0);
   }
 
-  Widget _leftTitles(double value, TitleMeta meta) {
+  Widget _leftTitles(
+    double value,
+    TitleMeta meta,
+    double minY,
+    double maxY,
+    double interval,
+  ) {
+    final tolerance = interval * 0.30;
+
+    final isMinValue = (value - minY).abs() < 0.0001;
+    final isMaxValue = (value - maxY).abs() < 0.0001;
+
+    // fl_chart may insert an interval title immediately beside the
+    // forced min/max boundary. Hide only that near-duplicate title.
+    // This keeps the intended 5 Y-axis values while preventing overlap.
+    if (!isMinValue &&
+        !isMaxValue &&
+        ((value - minY).abs() < tolerance ||
+            (maxY - value).abs() < tolerance)) {
+      return const SizedBox.shrink();
+    }
+
     return SideTitleWidget(
       meta: meta,
       space: 0,
-      child: SizedBox(
-        width: 30,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerRight,
-          child: Text(
-            _isNavMode ? value.toStringAsFixed(0) : _formatAmount(value),
-            maxLines: 1,
-            softWrap: false,
-            textAlign: TextAlign.right,
-            style: GoogleFonts.poppins(
-              color: Colors.white70,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+      child: Transform.translate(
+        // Keep boundary labels comfortably inside the chart.
+        offset: isMaxValue
+            ? const Offset(0, 3)
+            : isMinValue
+            ? const Offset(0, -2)
+            : Offset.zero,
+        child: SizedBox(
+          width: 34,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              _isNavMode ? value.toStringAsFixed(0) : _formatAmount(value),
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                color: Colors.white70,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
@@ -1518,21 +1537,34 @@ class _PortfolioCardState extends State<_PortfolioCard> {
       meta: meta,
       space: 8,
       child: Transform.translate(
+        // fl_chart centers edge titles on their X coordinate.
+        // Move the first and last labels inward so they remain fully visible.
         offset: index == 0
-            ? const Offset(12, 0)
+            ? const Offset(20, 0)
             : index == total - 1
-            ? const Offset(-14, 0)
+            ? const Offset(-42, 0)
             : Offset.zero,
-        child: Text(
-          text,
-          maxLines: 1,
-          softWrap: false,
-          style: GoogleFonts.poppins(
-            color: isLatestPoint
-                ? const Color(0xFF55F2B0)
-                : const Color(0xFFAAC0D6),
-            fontSize: 9.5,
-            fontWeight: isLatestPoint ? FontWeight.w600 : FontWeight.w500,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isLatestPoint && isToday ? 90 : 58,
+          ),
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            textAlign: isLatestPoint
+                ? TextAlign.right
+                : index == 0
+                ? TextAlign.left
+                : TextAlign.center,
+            style: GoogleFonts.poppins(
+              color: isLatestPoint
+                  ? const Color(0xFF55F2B0)
+                  : const Color(0xFFAAC0D6),
+              fontSize: isLatestPoint && isToday ? 9.0 : 9.5,
+              fontWeight: isLatestPoint ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -1620,7 +1652,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
           );
         }
 
-        final interval = ((_getMaxY(spots) - _getMinY(spots)) / 4).abs();
+        final chartMinY = _getMinY(spots);
+        final chartMaxY = _getMaxY(spots);
+
+        // 4 gaps = 5 Y-axis values.
+        final interval = ((chartMaxY - chartMinY) / 4).abs();
 
         const mint = Color(0xFF55F2B0);
         const lossRed = Color(0xFFFF5C64);
@@ -2048,8 +2084,8 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                         LineChartData(
                           minX: 0,
                           maxX: (spots.length - 1).toDouble(),
-                          minY: _getMinY(spots),
-                          maxY: _getMaxY(spots),
+                          minY: chartMinY,
+                          maxY: chartMaxY,
                           borderData: FlBorderData(show: false),
                           gridData: FlGridData(
                             show: true,
@@ -2085,10 +2121,24 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                             leftTitles: AxisTitles(
                               sideTitles: SideTitles(
                                 showTitles: true,
-                                reservedSize: 34,
+                                reservedSize: 38,
                                 interval: interval == 0 ? 1 : interval,
-                                minIncluded: false,
-                                getTitlesWidget: _leftTitles,
+
+                                // Keep both boundaries so the chart continues
+                                // to show 5 Y-axis values.
+                                minIncluded: true,
+                                maxIncluded: true,
+
+                                // If fl_chart generates a normal interval title
+                                // very close to a boundary title, hide only that
+                                // duplicate. The actual min/max values stay.
+                                getTitlesWidget: (value, meta) => _leftTitles(
+                                  value,
+                                  meta,
+                                  chartMinY,
+                                  chartMaxY,
+                                  interval == 0 ? 1 : interval,
+                                ),
                               ),
                             ),
                             bottomTitles: AxisTitles(

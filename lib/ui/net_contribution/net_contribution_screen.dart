@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:excel_community/excel_community.dart' as xls;
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/net_contribution_response.dart';
@@ -15,6 +19,538 @@ class NetContributionScreen extends StatefulWidget {
 class _NetContributionScreenState extends State<NetContributionScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+
+  bool _isExporting = false;
+
+  Future<void> _exportNetContributionExcel({DateTimeRange? dateRange}) async {
+    final provider = context.read<NetContributionProvider>();
+    final data = provider.data;
+
+    if (data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Net contribution data is not available.'),
+        ),
+      );
+      return;
+    }
+
+    final payIn = _filterEntries(provider.payIn, dateRange);
+
+    final payOut = _filterEntries(provider.payOut, dateRange);
+
+    final buyBack = _filterEntries(provider.buyback, dateRange);
+
+    final hasAnyData =
+        payIn.isNotEmpty || payOut.isNotEmpty || buyBack.isNotEmpty;
+
+    if (!hasAnyData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dateRange == null
+                ? 'No net contribution data available to export.'
+                : 'No Pay In, Pay Out or Buy Back data found for the selected date range.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_isExporting) {
+      return;
+    }
+
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final payInTotal = payIn.fold<double>(
+        0,
+        (total, entry) => total + (entry.amount ?? 0),
+      );
+
+      final payOutTotal = payOut.fold<double>(
+        0,
+        (total, entry) => total + (entry.amount ?? 0),
+      );
+
+      final buyBackTotal = buyBack.fold<double>(
+        0,
+        (total, entry) => total + (entry.amount ?? 0),
+      );
+
+      final netContribution = payInTotal - payOutTotal - buyBackTotal;
+
+      final excel = xls.Excel.createExcel();
+
+      final defaultSheet = excel.getDefaultSheet();
+      const summarySheetName = 'Summary';
+
+      if (defaultSheet != null && defaultSheet != summarySheetName) {
+        excel.rename(defaultSheet, summarySheetName);
+      }
+
+      excel.setDefaultSheet(summarySheetName);
+
+      final summary = excel[summarySheetName];
+      final payInSheet = excel['Pay In'];
+      final payOutSheet = excel['Pay Out'];
+      final buyBackSheet = excel['Buy Back'];
+
+      final headerStyle = xls.CellStyle(
+        backgroundColorHex: xls.ExcelColor.blue900,
+        fontColorHex: xls.ExcelColor.white,
+        bold: true,
+        horizontalAlign: xls.HorizontalAlign.Center,
+        verticalAlign: xls.VerticalAlign.Center,
+      );
+
+      final labelStyle = xls.CellStyle(bold: true);
+
+      // ============================================================
+      // SUMMARY SHEET
+      // ============================================================
+      summary.appendRow([xls.TextCellValue('Net Contribution Summary')]);
+
+      summary
+              .cell(xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+              .cellStyle =
+          headerStyle;
+
+      summary.appendRow([
+        xls.TextCellValue('Client Name'),
+        xls.TextCellValue((data.activeClientName ?? '-').trim()),
+      ]);
+
+      summary.appendRow([
+        xls.TextCellValue('Total Net Contribution'),
+        xls.DoubleCellValue(netContribution),
+      ]);
+
+      summary.appendRow([
+        xls.TextCellValue('Total Pay In'),
+        xls.DoubleCellValue(payInTotal),
+      ]);
+
+      summary.appendRow([
+        xls.TextCellValue('Total Pay Out'),
+        xls.DoubleCellValue(payOutTotal),
+      ]);
+
+      summary.appendRow([
+        xls.TextCellValue('Total Buy Back'),
+        xls.DoubleCellValue(buyBackTotal),
+      ]);
+
+      for (var row = 1; row <= 5; row++) {
+        summary
+                .cell(
+                  xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
+                )
+                .cellStyle =
+            labelStyle;
+      }
+
+      summary.setColumnWidth(0, 28);
+      summary.setColumnWidth(1, 24);
+
+      // ============================================================
+      // PAY IN / PAY OUT / BUY BACK SHEETS
+      // ============================================================
+      _writeContributionSheet(
+        sheet: payInSheet,
+        entries: payIn,
+        headerStyle: headerStyle,
+        totalLabel: 'Total Pay In',
+        totalAmount: payInTotal,
+      );
+
+      _writeContributionSheet(
+        sheet: payOutSheet,
+        entries: payOut,
+        headerStyle: headerStyle,
+        totalLabel: 'Total Pay Out',
+        totalAmount: payOutTotal,
+      );
+
+      _writeContributionSheet(
+        sheet: buyBackSheet,
+        entries: buyBack,
+        headerStyle: headerStyle,
+        totalLabel: 'Total Buy Back',
+        totalAmount: buyBackTotal,
+      );
+
+      final encoded = excel.encode();
+
+      if (encoded == null || encoded.isEmpty) {
+        throw Exception('Unable to generate Excel file.');
+      }
+
+      final clientName = (data.activeClientName ?? 'Client').trim().replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]+'),
+        '_',
+      );
+
+      final now = DateTime.now();
+
+      final exportDate =
+          '${now.year}'
+          '${now.month.toString().padLeft(2, '0')}'
+          '${now.day.toString().padLeft(2, '0')}';
+
+      final periodName = dateRange == null
+          ? 'Since_Inception'
+          : '${_fileDate(dateRange.start)}_to_${_fileDate(dateRange.end)}';
+
+      final fileName =
+          'Net_Contribution_'
+          '${clientName.isEmpty ? "Client" : clientName}_'
+          '${periodName}_'
+          '$exportDate';
+
+      final savedPath = await FileSaver.instance.saveAs(
+        name: fileName,
+        bytes: Uint8List.fromList(encoded),
+        fileExtension: 'xlsx',
+        includeExtension: true,
+        mimeType: MimeType.microsoftExcel,
+        dialogTitle: 'Export Net Contribution',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (savedPath == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Excel export cancelled.')),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Net Contribution Excel exported successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to export Excel: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showExportPeriodDialog() async {
+    if (_isExporting) {
+      return;
+    }
+
+    final selectedOption = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .36),
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 390),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .10),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColor.primary.withValues(alpha: .08),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.file_download_outlined,
+                        size: 20,
+                        color: AppColor.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Export Net Contribution',
+                              maxLines: 1,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColor.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Choose the period for your Excel export.',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              fontSize: 9.5,
+                              color: AppColor.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(5),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 19,
+                          color: AppColor.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE7ECF3)),
+                  ),
+                  child: Column(
+                    children: [
+                      _ExportOptionCard(
+                        icon: Icons.history_rounded,
+                        title: 'Since Inception',
+                        subtitle: 'Complete contribution history',
+                        onTap: () {
+                          Navigator.of(dialogContext).pop('since');
+                        },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 14),
+                        child: Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE7ECF3),
+                        ),
+                      ),
+                      _ExportOptionCard(
+                        icon: Icons.date_range_outlined,
+                        title: 'Select Date Range',
+                        subtitle: 'Choose From Date and To Date',
+                        onTap: () {
+                          Navigator.of(dialogContext).pop('range');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selectedOption == null) {
+      return;
+    }
+
+    if (selectedOption == 'since') {
+      await _exportNetContributionExcel();
+      return;
+    }
+
+    final now = DateTime.now();
+
+    final pickedRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(1990, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: DateTimeRange(
+        start: DateTime(now.year, now.month, 1),
+        end: now,
+      ),
+      helpText: 'Select Net Contribution Export Period',
+      saveText: 'EXPORT',
+      confirmText: 'EXPORT',
+      cancelText: 'CANCEL',
+    );
+
+    if (!mounted || pickedRange == null) {
+      return;
+    }
+
+    await _exportNetContributionExcel(dateRange: pickedRange);
+  }
+
+  List<ContributionEntry> _filterEntries(
+    List<ContributionEntry> entries,
+    DateTimeRange? dateRange,
+  ) {
+    if (dateRange == null) {
+      return List<ContributionEntry>.from(entries);
+    }
+
+    final fromDate = DateTime(
+      dateRange.start.year,
+      dateRange.start.month,
+      dateRange.start.day,
+    );
+
+    final toDate = DateTime(
+      dateRange.end.year,
+      dateRange.end.month,
+      dateRange.end.day,
+      23,
+      59,
+      59,
+    );
+
+    return entries.where((entry) {
+      final entryDate = _parseDate(entry.date);
+
+      if (entryDate == null) {
+        return false;
+      }
+
+      return !entryDate.isBefore(fromDate) && !entryDate.isAfter(toDate);
+    }).toList();
+  }
+
+  DateTime? _parseDate(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      return DateTime.parse(value.trim());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _fileDate(DateTime date) {
+    return '${date.year}'
+        '${date.month.toString().padLeft(2, '0')}'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  void _writeContributionSheet({
+    required xls.Sheet sheet,
+    required List<ContributionEntry> entries,
+    required xls.CellStyle headerStyle,
+    required String totalLabel,
+    required double totalAmount,
+  }) {
+    sheet.appendRow([
+      xls.TextCellValue('Date'),
+      xls.TextCellValue('Amount'),
+      xls.TextCellValue('Narration'),
+    ]);
+
+    for (var column = 0; column < 3; column++) {
+      sheet
+              .cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: 0,
+                ),
+              )
+              .cellStyle =
+          headerStyle;
+    }
+
+    sheet.setRowHeight(0, 24);
+
+    sheet.setColumnWidth(0, 18);
+    sheet.setColumnWidth(1, 20);
+    sheet.setColumnWidth(2, 46);
+
+    for (final entry in entries) {
+      final displayDate = (entry.displayDate ?? entry.date ?? '-').trim();
+
+      final narration = (entry.narration ?? '').trim();
+
+      sheet.appendRow([
+        xls.TextCellValue(displayDate.isEmpty ? '-' : displayDate),
+        xls.DoubleCellValue(entry.amount ?? 0),
+        xls.TextCellValue(narration.isEmpty ? '-' : narration),
+      ]);
+    }
+
+    sheet.appendRow([
+      xls.TextCellValue(totalLabel),
+      xls.DoubleCellValue(totalAmount),
+      xls.TextCellValue(''),
+    ]);
+
+    final totalRowIndex = entries.length + 1;
+
+    final totalStyle = xls.CellStyle(bold: true);
+
+    sheet
+            .cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: 0,
+                rowIndex: totalRowIndex,
+              ),
+            )
+            .cellStyle =
+        totalStyle;
+
+    sheet
+            .cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: 1,
+                rowIndex: totalRowIndex,
+              ),
+            )
+            .cellStyle =
+        totalStyle;
+  }
 
   @override
   void initState() {
@@ -42,6 +578,13 @@ class _NetContributionScreenState extends State<NetContributionScreen>
     final provider = context.watch<NetContributionProvider>();
     final data = provider.data;
 
+    // On smaller phones the summary + tabs can leave too little height
+    // for the transaction table. Give the table section its own bounded
+    // height and allow the whole page to scroll.
+    final contributionListHeight = (MediaQuery.sizeOf(context).height * 0.42)
+        .clamp(280.0, 420.0)
+        .toDouble();
+
     return Scaffold(
       backgroundColor: AppColor.background,
       appBar: AppBar(
@@ -63,6 +606,25 @@ class _NetContributionScreenState extends State<NetContributionScreen>
             color: AppColor.textPrimary,
           ),
         ),
+        actions: [
+          Tooltip(
+            message: 'Export Excel',
+            child: IconButton(
+              onPressed: provider.isLoading || _isExporting
+                  ? null
+                  : _showExportPeriodDialog,
+              icon: _isExporting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.file_download_outlined, size: 23),
+              color: AppColor.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, thickness: 1, color: AppColor.divider),
@@ -94,41 +656,43 @@ class _NetContributionScreenState extends State<NetContributionScreen>
                           ),
                         ),
 
-                        SliverFillRemaining(
-                          hasScrollBody: true,
+                        SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                            child: TabBarView(
-                              controller: _tabController,
-                              children: [
-                                _ContributionTabContent(
-                                  entries: data?.payIn ?? const [],
-                                  totalLabel: 'Total Pay In',
-                                  totalAmount:
-                                      data?.payInTotalFormatted ?? '₹0.00',
-                                  emptyTitle: 'No Pay In entries',
-                                  emptySubtitle:
-                                      'Receipt vouchers will appear here.',
-                                ),
-                                _ContributionTabContent(
-                                  entries: data?.payOut ?? const [],
-                                  totalLabel: 'Total Pay Out',
-                                  totalAmount:
-                                      data?.payOutTotalFormatted ?? '₹0.00',
-                                  emptyTitle: 'No Pay Out entries',
-                                  emptySubtitle:
-                                      'Payment vouchers will appear here.',
-                                ),
-                                _ContributionTabContent(
-                                  entries: data?.buyback ?? const [],
-                                  totalLabel: 'Total Buy Back',
-                                  totalAmount:
-                                      data?.buybackTotalFormatted ?? '₹0.00',
-                                  emptyTitle: 'No Buy Back entries',
-                                  emptySubtitle:
-                                      'Buy Back vouchers will appear here.',
-                                ),
-                              ],
+                            child: SizedBox(
+                              height: contributionListHeight,
+                              child: TabBarView(
+                                controller: _tabController,
+                                children: [
+                                  _ContributionTabContent(
+                                    entries: data?.payIn ?? const [],
+                                    totalLabel: 'Total Pay In',
+                                    totalAmount:
+                                        data?.payInTotalFormatted ?? '₹0.00',
+                                    emptyTitle: 'No Pay In entries',
+                                    emptySubtitle:
+                                        'Receipt vouchers will appear here.',
+                                  ),
+                                  _ContributionTabContent(
+                                    entries: data?.payOut ?? const [],
+                                    totalLabel: 'Total Pay Out',
+                                    totalAmount:
+                                        data?.payOutTotalFormatted ?? '₹0.00',
+                                    emptyTitle: 'No Pay Out entries',
+                                    emptySubtitle:
+                                        'Payment vouchers will appear here.',
+                                  ),
+                                  _ContributionTabContent(
+                                    entries: data?.buyback ?? const [],
+                                    totalLabel: 'Total Buy Back',
+                                    totalAmount:
+                                        data?.buybackTotalFormatted ?? '₹0.00',
+                                    emptyTitle: 'No Buy Back entries',
+                                    emptySubtitle:
+                                        'Buy Back vouchers will appear here.',
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -138,6 +702,79 @@ class _NetContributionScreenState extends State<NetContributionScreen>
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _ExportOptionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ExportOptionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(13),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColor.primary.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColor.primary, size: 18),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColor.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w400,
+                      color: AppColor.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFF8A97A8),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -427,7 +1064,7 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
@@ -526,7 +1163,7 @@ class _TotalFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
         border: Border(top: BorderSide(color: Color(0xFFE8EDF4))),

@@ -1,8 +1,11 @@
+// ignore_for_file: unused_import
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:profit_from_it_investors/provider/analytics_provider/analytics_provider.dart';
+import 'package:profit_from_it_investors/provider/app_update_provider/app_update_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/auth_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
@@ -50,6 +53,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => StockDetailProvider()),
         ChangeNotifierProvider(create: (_) => HoldingsProvider()),
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
+        ChangeNotifierProvider(create: (_) => AppUpdateProvider()),
         ChangeNotifierProvider(create: (_) => TaxometerProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => WatchlistProvider()),
@@ -78,8 +82,10 @@ class MyApp extends StatelessWidget {
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const SplashScreen(),
+        home: SplashScreen(),
       ),
     );
   }
 }
+
+
