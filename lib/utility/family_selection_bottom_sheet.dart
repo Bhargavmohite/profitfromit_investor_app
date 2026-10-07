@@ -111,22 +111,25 @@ class FamilySelectionBottomSheet extends StatelessWidget {
 
                             minVerticalPadding: 8,
 
-                            onTap: () {
-                              // Already selected.
-                              if (isSelected) {
-                                Navigator.pop(context, false);
+                            onTap: familyProvider.isSwitching
+                                ? null
+                                : () async {
+                                    // Already selected.
+                                    if (isSelected) {
+                                      Navigator.pop(context, false);
+                                      return;
+                                    }
 
-                                return;
-                              }
+                                    // Start the switch, but do not consider it
+                                    // complete until Home loads the destination
+                                    // Dashboard successfully.
+                                    final changed = await familyProvider
+                                        .selectFamily(family);
 
-                              // Update selected
-                              // family member.
-                              familyProvider.selectFamily(family);
-
-                              if (context.mounted) {
-                                Navigator.pop(context, true);
-                              }
-                            },
+                                    if (context.mounted) {
+                                      Navigator.pop(context, changed);
+                                    }
+                                  },
 
                             // ====================
                             // AVATAR

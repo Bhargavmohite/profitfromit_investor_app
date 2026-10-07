@@ -32,5 +32,6 @@ class CMD {
   static const String transactions = "transactions";
   static const String topMovers = "top-movers";
   static const String portfolioChart = "portfolio-chart";
+  static const String portfolioChartFull = "portfolio-chart-full";
   static const String deleteAccount = "delete-account";
 }

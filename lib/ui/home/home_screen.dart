@@ -6,7 +6,6 @@ import 'package:profit_from_it_investors/provider/authentication/user_provider.d
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
-import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
 import 'package:profit_from_it_investors/ui/net_contribution/net_contribution_screen.dart';
 import 'package:profit_from_it_investors/ui/dividend/dividend_screen.dart';
@@ -42,21 +41,20 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final homeProvider = context.read<HomeProvider>();
 
-      await homeProvider.getDashboard(context);
+      // Load the dashboard first because it contains the information needed
+      // to render Home. The chart is intentionally started afterwards without
+      // blocking the rest of the screen.
+      final dashboardLoaded = await homeProvider.getDashboard(context);
 
-      if (mounted) {
-        await homeProvider.getPortfolioChart(context);
+      if (mounted && dashboardLoaded) {
+        homeProvider.loadPortfolioChartInBackground(context);
       }
 
-      if (mounted) {
-        // Load the complete holdings list so Home-screen Gainers/Losers
-        // are calculated only from active holdings (net_quantity > 0).
-        await context.read<HoldingsProvider>().getHoldings();
-      }
-
+      // Do NOT preload the full Holdings API here. Holdings are loaded by the
+      // Holdings screen when the user actually opens that tab. Home already
+      // receives Holdings / Gainers / Losers from the Dashboard response.
       if (mounted) {
         final familyProvider = context.read<FamilyProvider>();
-        // await familyProvider.setFamilyList(homeProvider.dashboardData?.familyList ?? []);
         familyProvider.setFamilyList(
           homeProvider.dashboardData?.familyList ?? [],
         );
@@ -67,6 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final homeProvider = context.watch<HomeProvider>();
+    final clientSwitchState = context.watch<ClientSwitchProvider>();
+    final familySwitchState = context.watch<FamilyProvider>();
     final dashboardData = homeProvider.dashboardData;
 
     // IMPORTANT:
@@ -85,7 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColor.background,
-      body: homeProvider.dashboardLoading /*&& dashboardData == null*/
+      body: (clientSwitchState.isSwitching || familySwitchState.isSwitching)
+          ? const Center(child: CircularProgressIndicator())
+          : homeProvider.dashboardLoading && dashboardData == null
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
               child: Column(
@@ -395,15 +397,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async {
+                        // Refresh the dashboard summary first. The chart refresh
+                        // continues independently so the user is not forced to
+                        // wait for the heavier chart request.
                         await homeProvider.refreshDashboard(
                           context,
                           isRefresh: true,
                         );
-                        if (context.mounted) {
-                          await context.read<HoldingsProvider>().getHoldings(
-                            isRefresh: true,
-                          );
-                        }
                       },
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -1158,6 +1158,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showFamilySelection(BuildContext context) async {
+    final homeProvider = context.read<HomeProvider>();
+    final familyProvider = context.read<FamilyProvider>();
+
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1168,18 +1171,35 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => const FamilySelectionBottomSheet(),
     );
 
-    if (changed == true && context.mounted) {
-      await context.read<HomeProvider>().refreshDashboard(
-        context,
-        isRefresh: false,
-      );
-      if (context.mounted) {
-        await context.read<HoldingsProvider>().getHoldings(isRefresh: true);
-      }
+    if (changed != true) {
+      return;
+    }
+
+    // If Home disappeared while the selector was closing, never leave a
+    // half-finished family user-id switch behind.
+    if (!context.mounted) {
+      familyProvider.rollbackPendingSwitch();
+      return;
+    }
+
+    final dashboardLoaded = await homeProvider.refreshDashboard(
+      context,
+      isRefresh: false,
+    );
+
+    if (dashboardLoaded) {
+      // The backend confirmed the destination family member.
+      familyProvider.confirmPendingSwitch();
+    } else {
+      // Keep the previous Dashboard visible and restore the previous user-id.
+      familyProvider.rollbackPendingSwitch();
     }
   }
 
   Future<void> _showClientSelection(BuildContext context) async {
+    final homeProvider = context.read<HomeProvider>();
+    final clientSwitchProvider = context.read<ClientSwitchProvider>();
+
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1190,14 +1210,28 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => const ClientSelectionBottomSheet(),
     );
 
-    if (changed == true && context.mounted) {
-      await context.read<HomeProvider>().refreshDashboard(
-        context,
-        isRefresh: false,
-      );
-      if (context.mounted) {
-        await context.read<HoldingsProvider>().getHoldings(isRefresh: true);
-      }
+    if (changed != true) {
+      return;
+    }
+
+    // If Home disappeared while the selector was closing, never leave a
+    // half-finished user-id switch behind.
+    if (!context.mounted) {
+      clientSwitchProvider.rollbackPendingSwitch();
+      return;
+    }
+
+    final dashboardLoaded = await homeProvider.refreshDashboard(
+      context,
+      isRefresh: false,
+    );
+
+    if (dashboardLoaded) {
+      // The backend confirmed the selected active_client_id.
+      clientSwitchProvider.confirmPendingSwitch();
+    } else {
+      // Keep the old Dashboard visible and restore the previous user-id.
+      clientSwitchProvider.rollbackPendingSwitch();
     }
   }
 }
@@ -1218,37 +1252,35 @@ class _PortfolioCardState extends State<_PortfolioCard> {
 
   bool get _isNavMode => _chartDisplayMode == 'nav';
 
-  List<int> _getFilteredNavIndexes(HomeProvider provider) {
-    final curve = provider.dashboardData?.portfolioCurve;
+  List<int> _getFilteredChartIndexes(HomeProvider provider) {
+    final chart = provider.portfolioChartResponse?.data?.chart;
 
-    if (curve == null || curve.dates.isEmpty || curve.navValues.isEmpty) {
+    if (chart == null || chart.dates == null || chart.dates!.isEmpty) {
       return [];
     }
 
-    final length = curve.dates.length < curve.navValues.length
-        ? curve.dates.length
-        : curve.navValues.length;
+    final values = _isNavMode
+        ? (chart.navValues ?? const <double>[])
+        : (chart.portfolioValues ?? const <double>[]);
 
-    final parsedDates = <DateTime>[];
-    final originalIndexes = <int>[];
-
-    for (var i = 0; i < length; i++) {
-      final date = DateTime.tryParse(curve.dates[i]);
-      if (date == null) continue;
-
-      parsedDates.add(date);
-      originalIndexes.add(i);
-    }
-
-    if (parsedDates.isEmpty) {
+    if (values.isEmpty) {
       return [];
     }
+
+    final dates = chart.dates!;
+    final length = dates.length < values.length ? dates.length : values.length;
+
+    if (length <= 0) {
+      return [];
+    }
+
+    final indexes = List<int>.generate(length, (index) => index);
 
     if (provider.chartType == 'MAX') {
-      return originalIndexes;
+      return indexes;
     }
 
-    final lastDate = parsedDates.last;
+    final lastDate = dates[length - 1];
     DateTime cutoff;
 
     switch (provider.chartType) {
@@ -1262,34 +1294,26 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         cutoff = DateTime(lastDate.year - 1, lastDate.month, lastDate.day);
         break;
       default:
-        return originalIndexes;
+        return indexes;
     }
 
-    final filtered = <int>[];
-
-    for (var i = 0; i < parsedDates.length; i++) {
-      if (!parsedDates[i].isBefore(cutoff)) {
-        filtered.add(originalIndexes[i]);
-      }
-    }
-
-    return filtered;
+    return indexes.where((index) => !dates[index].isBefore(cutoff)).toList();
   }
 
   List<double> _getChartValues(HomeProvider provider) {
-    if (_isNavMode) {
-      final curve = provider.dashboardData?.portfolioCurve;
-      if (curve == null) return [];
+    final chart = provider.portfolioChartResponse?.data?.chart;
+    if (chart == null) return [];
 
-      final indexes = _getFilteredNavIndexes(provider);
+    final values = _isNavMode
+        ? (chart.navValues ?? const <double>[])
+        : (chart.portfolioValues ?? const <double>[]);
 
-      return indexes
-          .where((index) => index >= 0 && index < curve.navValues.length)
-          .map((index) => curve.navValues[index])
-          .toList();
-    }
+    final indexes = _getFilteredChartIndexes(provider);
 
-    return provider.portfolioChartResponse?.data?.chart?.portfolioValues ?? [];
+    return indexes
+        .where((index) => index >= 0 && index < values.length)
+        .map((index) => values[index])
+        .toList();
   }
 
   List<FlSpot> _getChartSpots(HomeProvider provider) {
@@ -1306,26 +1330,16 @@ class _PortfolioCardState extends State<_PortfolioCard> {
   }
 
   List<DateTime> _getDates(HomeProvider provider) {
-    if (_isNavMode) {
-      final curve = provider.dashboardData?.portfolioCurve;
-      if (curve == null) return [];
+    final chart = provider.portfolioChartResponse?.data?.chart;
+    if (chart == null || chart.dates == null) return [];
 
-      final indexes = _getFilteredNavIndexes(provider);
-      final dates = <DateTime>[];
+    final dates = chart.dates!;
+    final indexes = _getFilteredChartIndexes(provider);
 
-      for (final index in indexes) {
-        if (index < 0 || index >= curve.dates.length) continue;
-
-        final date = DateTime.tryParse(curve.dates[index]);
-        if (date != null) {
-          dates.add(date);
-        }
-      }
-
-      return dates;
-    }
-
-    return provider.portfolioChartResponse?.data?.chart?.dates ?? [];
+    return indexes
+        .where((index) => index >= 0 && index < dates.length)
+        .map((index) => dates[index])
+        .toList();
   }
 
   double _getMinY(List<FlSpot> spots) {
@@ -1623,34 +1637,6 @@ class _PortfolioCardState extends State<_PortfolioCard> {
         final dashboard = provider.dashboardData;
         final spots = _getChartSpots(provider);
         final dates = _getDates(provider);
-
-        if (spots.isEmpty) {
-          return Container(
-            height: 220,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0D3CCF), Color(0xFF082EAF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColor.primary.withValues(alpha: .35),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                "No chart data available",
-                style: GoogleFonts.poppins(color: AppColor.white, fontSize: 14),
-              ),
-            ),
-          );
-        }
 
         final chartMinY = _getMinY(spots);
         final chartMaxY = _getMaxY(spots);
@@ -2034,11 +2020,10 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                           onTap: () {
                             if (selected) return;
 
-                            if (_isNavMode) {
-                              provider.updateChartTypeLocally(period);
-                            } else {
-                              provider.updateChartType(context, period);
-                            }
+                            // Full history is already loaded by the separate
+                            // background chart API, so every period change is
+                            // instant and local for NAV and Absolute Value.
+                            provider.updateChartTypeLocally(period);
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 160),
@@ -2076,9 +2061,17 @@ class _PortfolioCardState extends State<_PortfolioCard> {
               // is updated to match the dark navy + mint reference.
               SizedBox(
                 height: 205,
-                child: (!_isNavMode && provider.portfolioChartLoading)
-                    ? const Center(
-                        child: CircularProgressIndicator(color: mint),
+                child: spots.isEmpty
+                    ? Center(
+                        child: provider.portfolioChartLoading
+                            ? const CircularProgressIndicator(color: mint)
+                            : Text(
+                                "No chart data available",
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
                       )
                     : LineChart(
                         LineChartData(

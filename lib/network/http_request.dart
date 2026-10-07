@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,99 +9,151 @@ import 'package:profit_from_it_investors/ui/authentication/login_screen/login_sc
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/constant.dart';
 import 'package:profit_from_it_investors/utility/local_storage.dart';
-import 'package:profit_from_it_investors/utility/network_helper.dart';
+
 import 'package:profit_from_it_investors/utility/session_manager.dart';
 
-Future<Response?> httpGet(String url, {Map<String, String> headers = const {}}) async {
-  debugPrint("http get request url ===================> $url");
-  if (!await NetworkCheck.isOnline()) {
-    debugPrint("❌ No Internet Connection");
-    // Common.showToast("No internet connection. Please check your network.");
-    throw const SocketException("No internet connection");
-  }
+// Reuse one client so TCP/TLS connections can be kept alive between requests.
+// Do not run a separate google.com DNS lookup before every API request. The API
+// request itself is the authoritative connectivity test.
+final http.Client _httpClient = http.Client();
 
-  if (headers.isEmpty) {
-    String token = await LocalStorage.getAccessToken();
-    String userId = SessionManager.userId;
-    headers = {
-      if (token != "") ...{"Authorization": "Bearer $token"},
-      if (userId.isNotEmpty) "user-id": userId,
-      "Content-Type": "application/json",
-      'Accept': 'application/json',
-    };
-  }
-  debugPrint("http get request url ===================> ${headers.toString()}");
-  var request = http.Request('GET', Uri.parse("${Constants.apiUrl}$url"));
+const Duration _requestTimeout = Duration(seconds: 30);
 
-  request.headers.addAll(headers);
-  http.StreamedResponse response = await request.send();
-  http.Response res = http.Response(await response.stream.bytesToString(), response.statusCode);
-  debugPrint("http get response $url ===================> ${res.body}");
-  if (res.statusCode == 401) {
-    LocalStorage.clearAll();
-    nextRoute(
-      MaterialPageRoute(
-        builder: (context) {
-          return LoginScreen();
-        },
-      ),
-      isClearBackRoutes: true,
+Future<Map<String, String>> _buildHeaders(Map<String, String> headers) async {
+  if (headers.isNotEmpty) return headers;
+
+  final token = await LocalStorage.getAccessToken();
+  final userId = SessionManager.userId;
+
+  return {
+    if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+    if (userId.isNotEmpty) 'user-id': userId,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+}
+
+Future<Response?> httpGet(
+  String url, {
+  Map<String, String> headers = const {},
+}) async {
+  final totalWatch = Stopwatch()..start();
+  final uri = Uri.parse('${Constants.apiUrl}$url');
+
+  try {
+    final finalHeaders = await _buildHeaders(headers);
+    final request = http.Request('GET', uri)..headers.addAll(finalHeaders);
+
+    final networkWatch = Stopwatch()..start();
+    final streamedResponse = await _httpClient
+        .send(request)
+        .timeout(_requestTimeout);
+    final headersMs = networkWatch.elapsedMilliseconds;
+
+    final bodyWatch = Stopwatch()..start();
+    final body = await streamedResponse.stream.bytesToString();
+    final bodyMs = bodyWatch.elapsedMilliseconds;
+
+    final res = http.Response(
+      body,
+      streamedResponse.statusCode,
+      headers: streamedResponse.headers,
+      request: streamedResponse.request,
+      isRedirect: streamedResponse.isRedirect,
+      persistentConnection: streamedResponse.persistentConnection,
+      reasonPhrase: streamedResponse.reasonPhrase,
     );
+
+    debugPrint(
+      '[HTTP PERF] GET $url | status=${res.statusCode} '
+      '| headers=${headersMs}ms | body=${bodyMs}ms '
+      '| total=${totalWatch.elapsedMilliseconds}ms | bytes=${body.length}',
+    );
+
+    if (res.statusCode == 401) {
+      await LocalStorage.clearAll();
+      nextRoute(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        isClearBackRoutes: true,
+      );
+    }
+
     return res;
-  } else {
-    return res;
+  } on TimeoutException {
+    debugPrint(
+      '[HTTP PERF] GET $url timed out after ${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
+  } on SocketException {
+    debugPrint(
+      '[HTTP PERF] GET $url socket error after ${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
   }
 }
 
-Future<Response?> httpPost(String url, dynamic body, {Map<String, String> headers = const {}}) async {
-  debugPrint("http post request url ===================> $url");
-  debugPrint("http post request body ===================> $body");
+Future<Response?> httpPost(
+  String url,
+  dynamic body, {
+  Map<String, String> headers = const {},
+}) async {
+  final totalWatch = Stopwatch()..start();
+  final uri = Uri.parse('${Constants.apiUrl}$url');
 
-  if (!await NetworkCheck.isOnline()) {
-    debugPrint("❌ No Internet Connection");
-    // Common.showToast("No internet connection. Please check your network.");
-    throw const SocketException("No internet connection");
-  }
+  try {
+    final finalHeaders = await _buildHeaders(headers);
+    final encodedBody = json.encode(body);
 
-  var myBody = json.encode(body);
-  var finalURL = "${Constants.apiUrl}$url";
-  debugPrint("http post request final url ===================> ${Constants.apiUrl}$url");
-  debugPrint("http post request final body ===================> $myBody");
-  if (headers.isEmpty) {
-    String token = await LocalStorage.getAccessToken();
-    String userId = SessionManager.userId;
-    headers = {
-      if (token != "") ...{"Authorization": "Bearer $token"},
-      if (userId.isNotEmpty) "user-id": userId,
-      "Content-Type": "application/json",
-      'Accept': 'application/json',
-    };
-  }
+    final request = http.Request('POST', uri)
+      ..headers.addAll(finalHeaders)
+      ..body = encodedBody;
 
-  var request = http.Request('POST', Uri.parse(finalURL));
+    final networkWatch = Stopwatch()..start();
+    final streamedResponse = await _httpClient
+        .send(request)
+        .timeout(_requestTimeout);
+    final headersMs = networkWatch.elapsedMilliseconds;
 
-  debugPrint("http post request header ===================> ${headers.toString()}");
+    final bodyWatch = Stopwatch()..start();
+    final responseBody = await streamedResponse.stream.bytesToString();
+    final bodyMs = bodyWatch.elapsedMilliseconds;
 
-  request.body = myBody;
-  request.headers.addAll(headers);
-  http.StreamedResponse response = await request.send();
-
-  http.Response res = http.Response(await response.stream.bytesToString(), response.statusCode);
-
-  debugPrint("http post response ===================> ${res.body}");
-
-  if (res.statusCode == 401) {
-    LocalStorage.clearAll();
-    nextRoute(
-      MaterialPageRoute(
-        builder: (context) {
-          return LoginScreen();
-        },
-      ),
-      isClearBackRoutes: true,
+    final res = http.Response(
+      responseBody,
+      streamedResponse.statusCode,
+      headers: streamedResponse.headers,
+      request: streamedResponse.request,
+      isRedirect: streamedResponse.isRedirect,
+      persistentConnection: streamedResponse.persistentConnection,
+      reasonPhrase: streamedResponse.reasonPhrase,
     );
+
+    // Do not print the full JSON response. portfolio-chart-full can be large,
+    // and printing it is expensive in debug builds. Never log bearer tokens.
+    debugPrint(
+      '[HTTP PERF] POST $url | status=${res.statusCode} '
+      '| headers=${headersMs}ms | body=${bodyMs}ms '
+      '| total=${totalWatch.elapsedMilliseconds}ms | bytes=${responseBody.length}',
+    );
+
+    if (res.statusCode == 401) {
+      await LocalStorage.clearAll();
+      nextRoute(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        isClearBackRoutes: true,
+      );
+    }
+
     return res;
-  } else {
-    return res;
+  } on TimeoutException {
+    debugPrint(
+      '[HTTP PERF] POST $url timed out after ${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
+  } on SocketException {
+    debugPrint(
+      '[HTTP PERF] POST $url socket error after ${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
   }
 }

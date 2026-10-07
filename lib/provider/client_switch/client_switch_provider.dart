@@ -17,6 +17,14 @@ class ClientSwitchProvider extends ChangeNotifier {
   bool _isSwitching = false;
   int? _switchingClientId;
 
+  // Transaction snapshot used to roll back a client switch if the
+  // destination Dashboard request fails or times out.
+  bool _hasPendingSwitch = false;
+  String _previousUserId = '';
+  ClientList? _previousSelectedClient;
+  int? _previousActiveClientId;
+  bool _previousIsClientImpersonating = false;
+
   List<ClientList> get clientList => _clientList;
   ClientList? get selectedClient => _selectedClient;
   String get ctype => _ctype;
@@ -132,7 +140,7 @@ class ClientSwitchProvider extends ChangeNotifier {
     // 2) Readonly Admin Client -> existing allowed client list
     //
     // A normal Client satisfies neither condition.
-    if (!canShowAnyClientSwitch) {
+    if (!canShowAnyClientSwitch || _isSwitching) {
       return false;
     }
 
@@ -140,13 +148,23 @@ class ClientSwitchProvider extends ChangeNotifier {
       return false;
     }
 
+    // Save the complete previous switching state BEFORE changing the user-id.
+    // The switch remains pending until Home confirms that the destination
+    // Dashboard was loaded successfully.
+    _hasPendingSwitch = true;
+    _previousUserId = SessionManager.userId;
+    _previousSelectedClient = _selectedClient;
+    _previousActiveClientId = _activeClientId;
+    _previousIsClientImpersonating = _isClientImpersonating;
+
     _isSwitching = true;
     _switchingClientId = targetId;
     notifyListeners();
 
     try {
-      // This is the only state change required for switching.
-      // httpGet/httpPost automatically send this as `user-id`.
+      // httpGet/httpPost automatically send this value as the `user-id`
+      // header. Do not mark the switch complete yet; the Dashboard response
+      // must validate the selected client first.
       SessionManager.changeUser(targetId.toString());
 
       _activeClientId = targetId;
@@ -158,12 +176,51 @@ class ClientSwitchProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('client switch error =======> $e');
+      rollbackPendingSwitch();
       return false;
-    } finally {
-      _isSwitching = false;
-      _switchingClientId = null;
-      notifyListeners();
     }
+  }
+
+  /// Finalizes a pending switch only after the destination Dashboard succeeds.
+  void confirmPendingSwitch() {
+    if (!_hasPendingSwitch && !_isSwitching) {
+      return;
+    }
+
+    _clearPendingSwitchSnapshot();
+    _isSwitching = false;
+    _switchingClientId = null;
+    notifyListeners();
+  }
+
+  /// Restores the previous client if the destination Dashboard fails/times out.
+  void rollbackPendingSwitch() {
+    if (_hasPendingSwitch) {
+      final fallbackUserId = _previousUserId.isNotEmpty
+          ? _previousUserId
+          : _previousActiveClientId?.toString() ?? '';
+
+      if (fallbackUserId.isNotEmpty) {
+        SessionManager.changeUser(fallbackUserId);
+      }
+
+      _selectedClient = _previousSelectedClient;
+      _activeClientId = _previousActiveClientId;
+      _isClientImpersonating = _previousIsClientImpersonating;
+    }
+
+    _clearPendingSwitchSnapshot();
+    _isSwitching = false;
+    _switchingClientId = null;
+    notifyListeners();
+  }
+
+  void _clearPendingSwitchSnapshot() {
+    _hasPendingSwitch = false;
+    _previousUserId = '';
+    _previousSelectedClient = null;
+    _previousActiveClientId = null;
+    _previousIsClientImpersonating = false;
   }
 
   /// Return to the original/master client locally.
@@ -202,6 +259,7 @@ class ClientSwitchProvider extends ChangeNotifier {
     _isClientImpersonating = false;
     _isSwitching = false;
     _switchingClientId = null;
+    _clearPendingSwitchSnapshot();
 
     if (notify) {
       notifyListeners();

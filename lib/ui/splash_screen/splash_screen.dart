@@ -119,10 +119,15 @@ class _SplashScreenState extends State<SplashScreen>
     final accessToken = await LocalStorage.getAccessToken();
     final userId = await LocalStorage.getId();
 
-    // Check version during the normal splash duration.
+    // Keep startup responsive. The previous 2500 ms hard minimum plus the
+    // network-based update check made launch-to-Home noticeably slower.
+    // Update checking is fail-open already, so cap how long it may block launch.
     await Future.wait([
-      Future.delayed(const Duration(milliseconds: 2500)),
-      appUpdateProvider.checkForUpdate(),
+      Future.delayed(const Duration(milliseconds: 800)),
+      appUpdateProvider.checkForUpdate().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => false,
+      ),
     ]);
 
     if (!mounted) {
