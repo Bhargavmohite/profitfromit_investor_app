@@ -1783,6 +1783,11 @@ class _PortfolioCardState extends State<_PortfolioCard> {
 
         final todayAmount = dashboard?.todaysGainLoss ?? "0";
         final totalAmount = dashboard?.totalGainLoss ?? "0";
+        final netContributionAmount = (dashboard?.netContribution ?? "0")
+            .toAmount();
+        final totalGainLossPercentage = netContributionAmount > 0
+            ? (totalAmount.toAmount() / netContributionAmount) * 100
+            : 0.0;
         final isTodayGain = todayAmount.toAmount() >= 0;
         final isTotalGain = totalAmount.toAmount() >= 0;
         final inceptionDate = _formatInceptionDate(
@@ -2095,6 +2100,9 @@ class _PortfolioCardState extends State<_PortfolioCard> {
                       title: "Total Gain/Loss",
                       amount: totalAmount,
                       isGain: isTotalGain,
+                      percentage:
+                          "${totalGainLossPercentage >= 0 ? '+' : ''}"
+                          "${totalGainLossPercentage.toStringAsFixed(2)}%",
                     ),
                   ),
                 ],

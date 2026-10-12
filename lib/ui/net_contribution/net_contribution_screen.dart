@@ -606,25 +606,6 @@ class _NetContributionScreenState extends State<NetContributionScreen>
             color: AppColor.textPrimary,
           ),
         ),
-        actions: [
-          Tooltip(
-            message: 'Export Excel',
-            child: IconButton(
-              onPressed: provider.isLoading || _isExporting
-                  ? null
-                  : _showExportPeriodDialog,
-              icon: _isExporting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.file_download_outlined, size: 23),
-              color: AppColor.primary,
-            ),
-          ),
-          const SizedBox(width: 6),
-        ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, thickness: 1, color: AppColor.divider),
