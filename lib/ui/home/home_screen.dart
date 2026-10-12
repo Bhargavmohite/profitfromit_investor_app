@@ -6,8 +6,10 @@ import 'package:profit_from_it_investors/provider/authentication/user_provider.d
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
+import 'package:profit_from_it_investors/provider/notification_provider/notification_provider.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
 import 'package:profit_from_it_investors/ui/net_contribution/net_contribution_screen.dart';
+import 'package:profit_from_it_investors/ui/notifications/notifications_screen.dart';
 import 'package:profit_from_it_investors/ui/dividend/dividend_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/client_selection_bottom_sheet.dart';
@@ -40,6 +42,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final homeProvider = context.read<HomeProvider>();
+      final notificationProvider = context.read<AppNotificationProvider>();
+
+      // Load the unread notification count for the Home bell.
+      // This is intentionally non-blocking so Home rendering is never delayed.
+      notificationProvider.getNotifications(showLoader: false);
 
       // Load the dashboard first because it contains the information needed
       // to render Home. The chart is intentionally started afterwards without
@@ -188,25 +195,139 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '$greeting, ${name.isNotEmpty ? name : "User"}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColor.textPrimary,
-                                    height: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Welcome to Profit From It',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                    color: AppColor.textSecondary,
-                                  ),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '$greeting, ${name.isNotEmpty ? name : "User"}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 19,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColor.textPrimary,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Welcome to Profit From It',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w400,
+                                              color: AppColor.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Consumer<AppNotificationProvider>(
+                                      builder: (context, notificationProvider, _) {
+                                        final unread =
+                                            notificationProvider.unreadCount;
+
+                                        return InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          onTap: () async {
+                                            await Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const NotificationsScreen(),
+                                              ),
+                                            );
+
+                                            if (context.mounted) {
+                                              notificationProvider
+                                                  .getNotifications(
+                                                    showLoader: false,
+                                                  );
+                                            }
+                                          },
+                                          child: SizedBox(
+                                            width: 44,
+                                            height: 44,
+                                            child: Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Container(
+                                                  width: 42,
+                                                  height: 42,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFF6F8FC,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: const Color(
+                                                        0xFFDDE4EF,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                    Icons
+                                                        .notifications_none_rounded,
+                                                    color: AppColor.textPrimary,
+                                                    size: 23,
+                                                  ),
+                                                ),
+                                                if (unread > 0)
+                                                  Positioned(
+                                                    right: -1,
+                                                    top: -3,
+                                                    child: Container(
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 18,
+                                                            minHeight: 18,
+                                                          ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 4,
+                                                          ),
+                                                      decoration:
+                                                          const BoxDecoration(
+                                                            color:
+                                                                AppColor.danger,
+                                                            shape:
+                                                                BoxShape.circle,
+                                                          ),
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: Text(
+                                                        unread > 99
+                                                            ? '99+'
+                                                            : unread.toString(),
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              color:
+                                                                  Colors.white,
+                                                              fontSize: 8,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
 
                                 if (hasFamily || showClientSwitch) ...[
@@ -1190,6 +1311,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (dashboardLoaded) {
       // The backend confirmed the destination family member.
       familyProvider.confirmPendingSwitch();
+      if (context.mounted) {
+        context.read<AppNotificationProvider>().getNotifications(
+          showLoader: false,
+        );
+      }
     } else {
       // Keep the previous Dashboard visible and restore the previous user-id.
       familyProvider.rollbackPendingSwitch();
@@ -1229,6 +1355,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (dashboardLoaded) {
       // The backend confirmed the selected active_client_id.
       clientSwitchProvider.confirmPendingSwitch();
+      if (context.mounted) {
+        context.read<AppNotificationProvider>().getNotifications(
+          showLoader: false,
+        );
+      }
     } else {
       // Keep the old Dashboard visible and restore the previous user-id.
       clientSwitchProvider.rollbackPendingSwitch();

@@ -323,13 +323,15 @@ class PortfolioCurve {
 class ClientList {
   int? id;
   String? name;
+  String? ccode;
   bool isCurrent;
 
-  ClientList({this.id, this.name, this.isCurrent = false});
+  ClientList({this.id, this.name, this.ccode, this.isCurrent = false});
 
   factory ClientList.fromJson(Map<String, dynamic> json) => ClientList(
     id: int.tryParse(json["id"]?.toString() ?? ""),
     name: json["name"]?.toString(),
+    ccode: json["ccode"]?.toString(),
     isCurrent:
         json["is_current"] == true ||
         json["is_current"]?.toString() == "1" ||
@@ -339,6 +341,7 @@ class ClientList {
   Map<String, dynamic> toJson() => {
     "id": id,
     "name": name,
+    "ccode": ccode,
     "is_current": isCurrent,
   };
 }

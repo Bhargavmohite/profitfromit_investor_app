@@ -12,6 +12,7 @@ import 'package:profit_from_it_investors/provider/authentication/user_provider.d
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/constant.dart';
 import 'package:profit_from_it_investors/utility/local_storage.dart';
+import 'package:profit_from_it_investors/utility/notification_service.dart';
 import 'package:profit_from_it_investors/utility/session_manager.dart';
 import 'package:provider/provider.dart';
 
@@ -35,8 +36,8 @@ class AuthProvider extends ChangeNotifier {
   LoginResponse? loginResponse;
 
   // Temporary pre-OTP token.
-// It exists only while the app is running.
-String _pendingOtpToken = "";
+  // It exists only while the app is running.
+  String _pendingOtpToken = "";
 
   String otp = "";
 
@@ -87,90 +88,73 @@ String _pendingOtpToken = "";
   }
 
   // Login Function
- Future<bool> login() async {
-  final mobile = mobileController.text.trim();
+  Future<bool> login() async {
+    final mobile = mobileController.text.trim();
 
-  _loginLoading = true;
-  notifyListeners();
-
-  try {
-    // Start a fresh login attempt.
-    _pendingOtpToken = "";
-
-    var body = {
-      "email": mobile,
-    };
-
-    // Login API should not use an old authenticated token.
-    Response? response = await httpPost(
-      CMD.login,
-      body,
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-    );
-
-    _loginLoading = false;
+    _loginLoading = true;
     notifyListeners();
 
-    if (response == null) {
-      return false;
-    }
+    try {
+      // Start a fresh login attempt.
+      _pendingOtpToken = "";
 
-    loginResponse = LoginResponse.fromJson(
-      jsonDecode(response.body),
-    );
+      var body = {"email": mobile};
 
-    if (loginResponse != null &&
-        loginResponse!.status == 200) {
-      
-      final pendingToken =
-          loginResponse!.data?.token?.trim() ?? "";
+      // Login API should not use an old authenticated token.
+      Response? response = await httpPost(
+        CMD.login,
+        body,
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      );
 
-      if (pendingToken.isEmpty) {
-        showError(
-          "Unable to start OTP verification. Please try again.",
-        );
+      _loginLoading = false;
+      notifyListeners();
+
+      if (response == null) {
         return false;
       }
 
-      // IMPORTANT:
-      // Do NOT save this in SharedPreferences.
-      // User is still NOT logged in.
-      _pendingOtpToken = pendingToken;
+      loginResponse = LoginResponse.fromJson(jsonDecode(response.body));
 
-      return true;
-    } else {
-      showError(
-        loginResponse?.message.toString() ?? "Login failed",
-      );
+      if (loginResponse != null && loginResponse!.status == 200) {
+        final pendingToken = loginResponse!.data?.token?.trim() ?? "";
+
+        if (pendingToken.isEmpty) {
+          showError("Unable to start OTP verification. Please try again.");
+          return false;
+        }
+
+        // IMPORTANT:
+        // Do NOT save this in SharedPreferences.
+        // User is still NOT logged in.
+        _pendingOtpToken = pendingToken;
+
+        return true;
+      } else {
+        showError(loginResponse?.message.toString() ?? "Login failed");
+
+        return false;
+      }
+    } catch (e) {
+      debugPrint("error when login =======> ${e.toString()}");
+
+      _loginLoading = false;
+      notifyListeners();
+
+      if (e is SocketException) {
+        showError("No internet connection. Please check your network.");
+      } else {
+        showError("Something went wrong. Please try again.");
+      }
 
       return false;
     }
-  } catch (e) {
-    debugPrint(
-      "error when login =======> ${e.toString()}",
-    );
-
-    _loginLoading = false;
-    notifyListeners();
-
-    if (e is SocketException) {
-      showError(
-        "No internet connection. Please check your network.",
-      );
-    } else {
-      showError(
-        "Something went wrong. Please try again.",
-      );
-    }
-
-    return false;
   }
-}
 
-Future<bool> otpVerification(BuildContext context) async {
+  Future<bool> otpVerification(BuildContext context) async {
     _isLoading = true;
     notifyListeners();
 
@@ -243,6 +227,9 @@ Future<bool> otpVerification(BuildContext context) async {
         await LocalStorage.saveAccessToken(verifiedToken);
 
         SessionManager.changeUser(verifiedUserId);
+
+        // Link this phone's FCM token to the authenticated investor.
+        await NotificationService.registerCurrentToken();
 
         clearAllData();
 

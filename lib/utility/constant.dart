@@ -17,6 +17,9 @@ class CMD {
   static const String otpReSend = "otp-resend";
   static const String getProfile = "profile";
   static const String dashboard = "dashboard";
+  static const String deviceToken = "device-token";
+  static const String notifications = "notifications";
+  static const String notificationsMarkRead = "notifications/mark-read";
 
   // Public app update/version check.
   static const String appVersion = "app-version";
