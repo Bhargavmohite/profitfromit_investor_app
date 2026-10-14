@@ -39,7 +39,9 @@ class _ClientSelectionBottomSheetState
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final keyboardInset = mediaQuery.viewInsets.bottom;
 
     return Consumer<ClientSwitchProvider>(
       builder: (context, provider, child) {
@@ -57,12 +59,16 @@ class _ClientSelectionBottomSheetState
             : 'No client accounts found.';
 
         return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: screenHeight * 0.82),
+          child: SizedBox(
+            // Keep the sheet height stable while filtering. Previously the sheet
+            // used only a maxHeight with a min-sized Column, so typing a query
+            // that returned fewer rows caused the whole sheet to collapse behind
+            // the keyboard (hiding the search field and results).
+            height: screenHeight * 0.82,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: MainAxisSize.max,
                 children: [
                   Container(
                     width: 50,
@@ -193,7 +199,9 @@ class _ClientSelectionBottomSheetState
                       child: ListView.separated(
                         shrinkWrap: true,
                         physics: const ClampingScrollPhysics(),
-                        padding: EdgeInsets.zero,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.only(bottom: keyboardInset + 12),
                         itemCount: clients.length,
                         separatorBuilder: (context, index) {
                           return Divider(height: 1, color: AppColor.divider);
