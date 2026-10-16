@@ -76,6 +76,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final familySwitchState = context.watch<FamilyProvider>();
     final dashboardData = homeProvider.dashboardData;
 
+    final bool isAccountSwitching =
+        clientSwitchState.isSwitching || familySwitchState.isSwitching;
+
+    final String switchingAccountName = clientSwitchState.isSwitching
+        ? (clientSwitchState.selectedClient?.name ?? '').trim()
+        : familySwitchState.isSwitching
+        ? (familySwitchState.selectedFamily?.name ?? '').trim()
+        : '';
+
+    final String switchingAccountCode = clientSwitchState.isSwitching
+        ? (clientSwitchState.selectedClient?.ccode ?? '').trim()
+        : '';
+
     // IMPORTANT:
     // Holdings / Gainers / Losers must come from the SAME Dashboard response.
     //
@@ -92,9 +105,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColor.background,
-      body: (clientSwitchState.isSwitching || familySwitchState.isSwitching)
-          ? const Center(child: CircularProgressIndicator())
-          : homeProvider.dashboardLoading && dashboardData == null
+
+      // Do not replace the entire Home screen with a blank spinner while
+      // switching clients. Keep the last confirmed dashboard visible until
+      // the destination dashboard arrives, then swap it atomically.
+      //
+      // This also allows the per-client chart cache in HomeProvider to become
+      // visible immediately when a previously loaded client is selected.
+      body: homeProvider.dashboardLoading && dashboardData == null
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
               child: Column(
@@ -108,7 +126,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           clientSwitchProvider,
                           _,
                         ) {
-                          final name = dashboardData?.name ?? userProvider.name;
+                          // Give immediate visual confirmation that the tap
+                          // was accepted. While the destination dashboard is
+                          // loading, show the selected account name in the
+                          // header instead of leaving the old user's name there.
+                          final name =
+                              isAccountSwitching &&
+                                  switchingAccountName.isNotEmpty
+                              ? switchingAccountName
+                              : (dashboardData?.name ?? userProvider.name);
 
                           // Family selector rule:
                           // - Master (is_family_master = 1) + family_id => SHOW
@@ -515,358 +541,416 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                   ),
 
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () async {
-                        // Refresh the dashboard summary first. The chart refresh
-                        // continues independently so the user is not forced to
-                        // wait for the heavier chart request.
-                        await homeProvider.refreshDashboard(
-                          context,
-                          isRefresh: true,
-                        );
-                      },
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _PortfolioCard(),
-                            const SizedBox(height: 16),
-                            // ================================
-                            // BELOW-CHART PORTFOLIO SUMMARY ONLY
-                            // ================================
-
-                            // Row 1: Realised / Un-Realised
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  // Compact transition feedback. We intentionally do NOT show
+                  // a full-screen loader; the current dashboard remains visible
+                  // but the user can clearly see that a different account is
+                  // being loaded.
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child: isAccountSwitching
+                        ? Container(
+                            key: ValueKey(
+                              'switching-${clientSwitchState.switchingClientId ?? familySwitchState.switchingFamilyId ?? 0}',
+                            ),
+                            width: double.infinity,
+                            margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColor.primary.withValues(alpha: 0.18),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Column(
                               children: [
-                                Expanded(
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 120,
-                                    ),
-                                    padding: const EdgeInsets.all(13),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          AmountUtils.isPositive(
-                                            homeProvider
-                                                .dashboardData
-                                                ?.realised,
-                                          )
-                                          ? const Color(0xFFEFFFF8)
-                                          : const Color(0xFFFFF1F1),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color:
-                                            AmountUtils.isPositive(
-                                              homeProvider
-                                                  .dashboardData
-                                                  ?.realised,
-                                            )
-                                            ? const Color(0xFFA7EBCF)
-                                            : const Color(0xFFFFC5C5),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: AppColor.primary.withValues(
+                                          alpha: 0.10,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.sync_rounded,
+                                        size: 20,
+                                        color: AppColor.primary,
                                       ),
                                     ),
-                                    child: Column(
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            switchingAccountName.isNotEmpty
+                                                ? 'Switching to $switchingAccountName'
+                                                : 'Switching account',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColor.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            switchingAccountCode.isNotEmpty
+                                                ? 'Client Code: $switchingAccountCode  •  Updating portfolio'
+                                                : 'Updating portfolio data',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w400,
+                                              color: AppColor.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: const LinearProgressIndicator(
+                                    minHeight: 2.5,
+                                    backgroundColor: Color(0xFFE8EEF8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+
+                  Expanded(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 160),
+                      opacity: isAccountSwitching ? 0.55 : 1.0,
+                      child: IgnorePointer(
+                        ignoring: isAccountSwitching,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          child: KeyedSubtree(
+                            key: ValueKey(
+                              'dashboard-${dashboardData?.activeClientId ?? 0}',
+                            ),
+                            child: RefreshIndicator(
+                              onRefresh: () async {
+                                // Refresh the dashboard summary first. The chart refresh
+                                // continues independently so the user is not forced to
+                                // wait for the heavier chart request.
+                                await homeProvider.refreshDashboard(
+                                  context,
+                                  isRefresh: true,
+                                );
+                              },
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.all(8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _PortfolioCard(),
+                                    const SizedBox(height: 16),
+                                    // ================================
+                                    // BELOW-CHART PORTFOLIO SUMMARY ONLY
+                                    // ================================
+
+                                    // Row 1: Realised / Un-Realised
+                                    Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.realised,
-                                                )
-                                                ? const Color(
-                                                    0xFF009B72,
-                                                  ).withValues(alpha: .10)
-                                                : const Color(
-                                                    0xFFE53935,
-                                                  ).withValues(alpha: .10),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
+                                        Expanded(
+                                          child: Container(
+                                            constraints: const BoxConstraints(
+                                              minHeight: 120,
                                             ),
-                                          ),
-                                          child: Icon(
-                                            AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.realised,
-                                                )
-                                                ? Icons.trending_up_rounded
-                                                : Icons.trending_down_rounded,
-                                            size: 18,
-                                            color:
-                                                AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.realised,
-                                                )
-                                                ? const Color(0xFF009B72)
-                                                : const Color(0xFFE53935),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                          'Realised P&L',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            homeProvider
-                                                    .dashboardData
-                                                    ?.realised ??
-                                                '-',
-                                            maxLines: 1,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
+                                            padding: const EdgeInsets.all(13),
+                                            decoration: BoxDecoration(
                                               color:
                                                   AmountUtils.isPositive(
                                                     homeProvider
                                                         .dashboardData
                                                         ?.realised,
                                                   )
-                                                  ? const Color(0xFF009B72)
-                                                  : const Color(0xFFE53935),
+                                                  ? const Color(0xFFEFFFF8)
+                                                  : const Color(0xFFFFF1F1),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color:
+                                                    AmountUtils.isPositive(
+                                                      homeProvider
+                                                          .dashboardData
+                                                          ?.realised,
+                                                    )
+                                                    ? const Color(0xFFA7EBCF)
+                                                    : const Color(0xFFFFC5C5),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.realised,
+                                                        )
+                                                        ? const Color(
+                                                            0xFF009B72,
+                                                          ).withValues(
+                                                            alpha: .10,
+                                                          )
+                                                        : const Color(
+                                                            0xFFE53935,
+                                                          ).withValues(
+                                                            alpha: .10,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.realised,
+                                                        )
+                                                        ? Icons
+                                                              .trending_up_rounded
+                                                        : Icons
+                                                              .trending_down_rounded,
+                                                    size: 18,
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.realised,
+                                                        )
+                                                        ? const Color(
+                                                            0xFF009B72,
+                                                          )
+                                                        : const Color(
+                                                            0xFFE53935,
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Text(
+                                                  'Realised P&L',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        AppColor.textSecondary,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: Text(
+                                                    homeProvider
+                                                            .dashboardData
+                                                            ?.realised ??
+                                                        '-',
+                                                    maxLines: 1,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color:
+                                                          AmountUtils.isPositive(
+                                                            homeProvider
+                                                                .dashboardData
+                                                                ?.realised,
+                                                          )
+                                                          ? const Color(
+                                                              0xFF009B72,
+                                                            )
+                                                          : const Color(
+                                                              0xFFE53935,
+                                                            ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Booked profit / loss',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    color:
+                                                        AppColor.textSecondary,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Booked profit / loss',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 120,
-                                    ),
-                                    padding: const EdgeInsets.all(13),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          AmountUtils.isPositive(
-                                            homeProvider
-                                                .dashboardData
-                                                ?.unrealised,
-                                          )
-                                          ? const Color(0xFFEFFFF8)
-                                          : const Color(0xFFFFF1F1),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color:
-                                            AmountUtils.isPositive(
-                                              homeProvider
-                                                  .dashboardData
-                                                  ?.unrealised,
-                                            )
-                                            ? const Color(0xFFA7EBCF)
-                                            : const Color(0xFFFFC5C5),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.unrealised,
-                                                )
-                                                ? const Color(
-                                                    0xFF009B72,
-                                                  ).withValues(alpha: .10)
-                                                : const Color(
-                                                    0xFFE53935,
-                                                  ).withValues(alpha: .10),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Container(
+                                            constraints: const BoxConstraints(
+                                              minHeight: 120,
                                             ),
-                                          ),
-                                          child: Icon(
-                                            AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.unrealised,
-                                                )
-                                                ? Icons.trending_up_rounded
-                                                : Icons.trending_down_rounded,
-                                            size: 18,
-                                            color:
-                                                AmountUtils.isPositive(
-                                                  homeProvider
-                                                      .dashboardData
-                                                      ?.unrealised,
-                                                )
-                                                ? const Color(0xFF009B72)
-                                                : const Color(0xFFE53935),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                          'Un-Realised P&L',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            homeProvider
-                                                    .dashboardData
-                                                    ?.unrealised ??
-                                                '-',
-                                            maxLines: 1,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
+                                            padding: const EdgeInsets.all(13),
+                                            decoration: BoxDecoration(
                                               color:
                                                   AmountUtils.isPositive(
                                                     homeProvider
                                                         .dashboardData
                                                         ?.unrealised,
                                                   )
-                                                  ? const Color(0xFF009B72)
-                                                  : const Color(0xFFE53935),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Current market profit / loss',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            color: AppColor.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 10),
-
-                            // Row 2: Dividend / Net Contribution
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(16),
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const DividendScreen(),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        minHeight: 120,
-                                      ),
-                                      padding: const EdgeInsets.all(13),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF9E8),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: const Color(0xFFFFD98A),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: const Color(
-                                                0xFFB66A00,
-                                              ).withValues(alpha: .10),
+                                                  ? const Color(0xFFEFFFF8)
+                                                  : const Color(0xFFFFF1F1),
                                               borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                            child: const Icon(
-                                              Icons.currency_rupee_rounded,
-                                              size: 18,
-                                              color: Color(0xFFB66A00),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            'Dividend Income',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColor.textSecondary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              homeProvider
-                                                      .dashboardData
-                                                      ?.dividend ??
-                                                  '-',
-                                              maxLines: 1,
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: const Color(0xFF9C5200),
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color:
+                                                    AmountUtils.isPositive(
+                                                      homeProvider
+                                                          .dashboardData
+                                                          ?.unrealised,
+                                                    )
+                                                    ? const Color(0xFFA7EBCF)
+                                                    : const Color(0xFFFFC5C5),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  'Dividend received',
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.unrealised,
+                                                        )
+                                                        ? const Color(
+                                                            0xFF009B72,
+                                                          ).withValues(
+                                                            alpha: .10,
+                                                          )
+                                                        : const Color(
+                                                            0xFFE53935,
+                                                          ).withValues(
+                                                            alpha: .10,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.unrealised,
+                                                        )
+                                                        ? Icons
+                                                              .trending_up_rounded
+                                                        : Icons
+                                                              .trending_down_rounded,
+                                                    size: 18,
+                                                    color:
+                                                        AmountUtils.isPositive(
+                                                          homeProvider
+                                                              .dashboardData
+                                                              ?.unrealised,
+                                                        )
+                                                        ? const Color(
+                                                            0xFF009B72,
+                                                          )
+                                                        : const Color(
+                                                            0xFFE53935,
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Text(
+                                                  'Un-Realised P&L',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        AppColor.textSecondary,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: Text(
+                                                    homeProvider
+                                                            .dashboardData
+                                                            ?.unrealised ??
+                                                        '-',
+                                                    maxLines: 1,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color:
+                                                          AmountUtils.isPositive(
+                                                            homeProvider
+                                                                .dashboardData
+                                                                ?.unrealised,
+                                                          )
+                                                          ? const Color(
+                                                              0xFF009B72,
+                                                            )
+                                                          : const Color(
+                                                              0xFFE53935,
+                                                            ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Current market profit / loss',
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -876,398 +960,564 @@ class _HomeScreenState extends State<HomeScreen> {
                                                         AppColor.textSecondary,
                                                   ),
                                                 ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 10),
+
+                                    // Row 2: Dividend / Net Contribution
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            onTap: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const DividendScreen(),
+                                                ),
+                                              );
+                                            },
+                                            child: Container(
+                                              constraints: const BoxConstraints(
+                                                minHeight: 120,
                                               ),
-                                              const SizedBox(width: 4),
-                                              const Icon(
-                                                Icons.arrow_forward_ios_rounded,
-                                                size: 10,
-                                                color: Color(0xFF9C5200),
+                                              padding: const EdgeInsets.all(13),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFF9E8),
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFFFD98A,
+                                                  ),
+                                                ),
                                               ),
-                                            ],
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    width: 32,
+                                                    height: 32,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                        0xFFB66A00,
+                                                      ).withValues(alpha: .10),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons
+                                                          .currency_rupee_rounded,
+                                                      size: 18,
+                                                      color: Color(0xFFB66A00),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  Text(
+                                                    'Dividend Income',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: AppColor
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      homeProvider
+                                                              .dashboardData
+                                                              ?.dividend ??
+                                                          '-',
+                                                      maxLines: 1,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 17,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: const Color(
+                                                              0xFF9C5200,
+                                                            ),
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                          'Dividend received',
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 9,
+                                                            color: AppColor
+                                                                .textSecondary,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      const Icon(
+                                                        Icons
+                                                            .arrow_forward_ios_rounded,
+                                                        size: 10,
+                                                        color: Color(
+                                                          0xFF9C5200,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            onTap: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const NetContributionScreen(),
+                                                ),
+                                              );
+                                            },
+                                            child: Container(
+                                              constraints: const BoxConstraints(
+                                                minHeight: 120,
+                                              ),
+                                              padding: const EdgeInsets.all(13),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF0F6FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFBDD6FF,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    width: 32,
+                                                    height: 32,
+                                                    decoration: BoxDecoration(
+                                                      color: AppColor.primary
+                                                          .withValues(
+                                                            alpha: .10,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons
+                                                          .account_balance_wallet_outlined,
+                                                      size: 18,
+                                                      color: AppColor.primary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  Text(
+                                                    'Net Contribution',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: AppColor
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      homeProvider
+                                                              .dashboardData
+                                                              ?.netContribution ??
+                                                          '-',
+                                                      maxLines: 1,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 17,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: AppColor
+                                                                .primary,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                          'Net capital contribution',
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 9,
+                                                            color: AppColor
+                                                                .textSecondary,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      const Icon(
+                                                        Icons
+                                                            .arrow_forward_ios_rounded,
+                                                        size: 10,
+                                                        color: AppColor.primary,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    // Holdings / Gainers / Losers strip
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 13,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColor.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: Colors.black.withValues(
+                                            alpha: .06,
+                                          ),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: .04,
+                                            ),
+                                            blurRadius: 14,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFF244A7C,
+                                                    ).withValues(alpha: .08),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          9,
+                                                        ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.layers_outlined,
+                                                    size: 17,
+                                                    color: Color(0xFF244A7C),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 5),
+                                                Text(
+                                                  homeProvider
+                                                          .dashboardData
+                                                          ?.totalHolding ??
+                                                      '-',
+                                                  maxLines: 1,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 17,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColor.textPrimary,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Holdings',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: const Color(
+                                                      0xFF244A7C,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Container(
+                                            width: 1,
+                                            height: 50,
+                                            color: Colors.black.withValues(
+                                              alpha: .06,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFF009B72,
+                                                    ).withValues(alpha: .08),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          9,
+                                                        ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.trending_up_rounded,
+                                                    size: 17,
+                                                    color: Color(0xFF009B72),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 5),
+                                                Text(
+                                                  homeProvider
+                                                          .dashboardData
+                                                          ?.totalGainer ??
+                                                      '-',
+                                                  maxLines: 1,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 17,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColor.textPrimary,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Gainers',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: const Color(
+                                                      0xFF009B72,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Container(
+                                            width: 1,
+                                            height: 50,
+                                            color: Colors.black.withValues(
+                                              alpha: .06,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFE53935,
+                                                    ).withValues(alpha: .08),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          9,
+                                                        ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.trending_down_rounded,
+                                                    size: 17,
+                                                    color: Color(0xFFE53935),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 5),
+                                                Text(
+                                                  homeProvider
+                                                          .dashboardData
+                                                          ?.totalLoser ??
+                                                      '-',
+                                                  maxLines: 1,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 17,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColor.textPrimary,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Losers',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: const Color(
+                                                      0xFFE53935,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(16),
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const NetContributionScreen(),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        minHeight: 120,
+
+                                    const SizedBox(height: 16),
+
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
                                       ),
-                                      padding: const EdgeInsets.all(13),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF0F6FF),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: const Color(0xFFBDD6FF),
-                                        ),
-                                      ),
-                                      child: Column(
+                                      child: Row(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                            CrossAxisAlignment.center,
                                         children: [
-                                          Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: AppColor.primary
-                                                  .withValues(alpha: .10),
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                            child: const Icon(
-                                              Icons
-                                                  .account_balance_wallet_outlined,
-                                              size: 18,
-                                              color: AppColor.primary,
+                                          Text(
+                                            'Top Holdings',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColor.textPrimary,
                                             ),
                                           ),
-                                          const SizedBox(height: 10),
+                                          const SizedBox(width: 5),
                                           Text(
-                                            'Net Contribution',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                            'By Current Value',
                                             style: GoogleFonts.poppins(
-                                              fontSize: 10,
+                                              fontSize: 7.5,
                                               fontWeight: FontWeight.w500,
                                               color: AppColor.textSecondary,
                                             ),
                                           ),
-                                          const SizedBox(height: 2),
-                                          FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              homeProvider
-                                                      .dashboardData
-                                                      ?.netContribution ??
-                                                  '-',
-                                              maxLines: 1,
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColor.primary,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  'Net capital contribution',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 9,
-                                                    color:
-                                                        AppColor.textSecondary,
-                                                  ),
+                                          const Spacer(),
+                                          if (homeProvider
+                                              .topHoldings
+                                              .isNotEmpty)
+                                            InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              onTap: () {
+                                                widget.onViewAllHoldings
+                                                    ?.call();
+                                              },
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColor.primary
+                                                      .withValues(alpha: .07),
+                                                  borderRadius:
+                                                      BorderRadius.circular(18),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      'View All (${homeProvider.dashboardData?.totalHolding ?? homeProvider.topHoldings.length})',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontSize: 9,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColor
+                                                                .primary,
+                                                          ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                      Icons
+                                                          .arrow_forward_rounded,
+                                                      size: 13,
+                                                      color: AppColor.primary,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(width: 4),
-                                              const Icon(
-                                                Icons.arrow_forward_ios_rounded,
-                                                size: 10,
-                                                color: AppColor.primary,
-                                              ),
-                                            ],
-                                          ),
+                                            ),
                                         ],
                                       ),
                                     ),
-                                  ),
-                                ),
-                              ],
-                            ),
 
-                            const SizedBox(height: 12),
+                                    const SizedBox(height: 8),
 
-                            // Holdings / Gainers / Losers strip
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 13,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColor.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Colors.black.withValues(alpha: .06),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: .04),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 30,
-                                          height: 30,
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                              0xFF244A7C,
-                                            ).withValues(alpha: .08),
-                                            borderRadius: BorderRadius.circular(
-                                              9,
-                                            ),
+                                    if (homeProvider.topHoldings.isEmpty)
+                                      Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(20),
+                                          child: Text(
+                                            "No holdings available",
+                                            style: GoogleFonts.poppins(),
                                           ),
-                                          child: const Icon(
-                                            Icons.layers_outlined,
-                                            size: 17,
-                                            color: Color(0xFF244A7C),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          homeProvider
-                                                  .dashboardData
-                                                  ?.totalHolding ??
-                                              '-',
-                                          maxLines: 1,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColor.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Holdings',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFF244A7C),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 1,
-                                    height: 50,
-                                    color: Colors.black.withValues(alpha: .06),
-                                  ),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 30,
-                                          height: 30,
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                              0xFF009B72,
-                                            ).withValues(alpha: .08),
-                                            borderRadius: BorderRadius.circular(
-                                              9,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.trending_up_rounded,
-                                            size: 17,
-                                            color: Color(0xFF009B72),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          homeProvider
-                                                  .dashboardData
-                                                  ?.totalGainer ??
-                                              '-',
-                                          maxLines: 1,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColor.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Gainers',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFF009B72),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 1,
-                                    height: 50,
-                                    color: Colors.black.withValues(alpha: .06),
-                                  ),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 30,
-                                          height: 30,
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                              0xFFE53935,
-                                            ).withValues(alpha: .08),
-                                            borderRadius: BorderRadius.circular(
-                                              9,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.trending_down_rounded,
-                                            size: 17,
-                                            color: Color(0xFFE53935),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          homeProvider
-                                                  .dashboardData
-                                                  ?.totalLoser ??
-                                              '-',
-                                          maxLines: 1,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColor.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Losers',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFFE53935),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Top Holdings',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColor.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'By Current Value',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 7.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColor.textSecondary,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (homeProvider.topHoldings.isNotEmpty)
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(18),
-                                      onTap: () {
-                                        widget.onViewAllHoldings?.call();
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppColor.primary.withValues(
-                                            alpha: .07,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            18,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'View All (${homeProvider.dashboardData?.totalHolding ?? homeProvider.topHoldings.length})',
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColor.primary,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            const Icon(
-                                              Icons.arrow_forward_rounded,
-                                              size: 13,
-                                              color: AppColor.primary,
-                                            ),
-                                          ],
                                         ),
                                       ),
+
+                                    ...homeProvider.topHoldings.map(
+                                      (stock) => _HoldingTile(
+                                        holding: stock,
+                                        onTap: () {
+                                          nextRoute(
+                                            MaterialPageRoute(
+                                              builder: (context) {
+                                                return StockDetailScreen(
+                                                  stockId: stock.id.toString(),
+                                                );
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            if (homeProvider.topHoldings.isEmpty)
-                              Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Text(
-                                    "No holdings available",
-                                    style: GoogleFonts.poppins(),
-                                  ),
+                                  ],
                                 ),
                               ),
-
-                            ...homeProvider.topHoldings.map(
-                              (stock) => _HoldingTile(
-                                holding: stock,
-                                onTap: () {
-                                  nextRoute(
-                                    MaterialPageRoute(
-                                      builder: (context) {
-                                        return StockDetailScreen(
-                                          stockId: stock.id.toString(),
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1881,16 +2131,15 @@ class _PortfolioCardState extends State<_PortfolioCard> {
           return Expanded(
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () async {
+              onTap: () {
                 if (selected) return;
 
+                // NAV and Absolute Value are both included in the same
+                // portfolio-chart-full response. Switching display mode is a
+                // local UI operation and must never trigger another API call.
                 setState(() {
                   _chartDisplayMode = value;
                 });
-
-                if (value == 'absolute') {
-                  await provider.getPortfolioChart(context);
-                }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),

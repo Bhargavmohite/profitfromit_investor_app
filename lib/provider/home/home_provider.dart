@@ -41,6 +41,11 @@ class HomeProvider extends ChangeNotifier {
   String chartType = "1M";
   PortfolioChartResponse? portfolioChartResponse;
 
+  // Keep already-loaded charts per client in memory. When a user switches back
+  // to an account in the same app session, its last chart can be shown
+  // immediately while a silent refresh checks for newer data.
+  final Map<String, PortfolioChartResponse> _portfolioChartCache = {};
+
   // Request generations prevent an older Dashboard/chart response from
   // overwriting data after the user has already switched to another client.
   int _dashboardRequestVersion = 0;
@@ -124,18 +129,19 @@ class HomeProvider extends ChangeNotifier {
           );
         }
 
-        // Never show the previous client's chart while a newly selected
-        // Family / Partner / Readonly-Admin account loads its own chart.
+        // Never show another client's chart. If this client was already
+        // loaded earlier in this app session, restore its cached chart
+        // immediately instead of showing an empty chart while the server
+        // recalculates/refetches it.
         final newActiveClientId = parsedDashboardResponse.data?.activeClientId;
         if (previousActiveClientId != null &&
             newActiveClientId != null &&
             previousActiveClientId != newActiveClientId) {
-          portfolioChartResponse = null;
+          final cacheKey = newActiveClientId.toString();
+          portfolioChartResponse = _portfolioChartCache[cacheKey];
         }
 
-        if (portfolioChartResponse == null) {
-          _portfolioChartLoading = true;
-        }
+        _portfolioChartLoading = portfolioChartResponse == null;
 
         notifyListeners();
         return true;
@@ -216,9 +222,17 @@ class HomeProvider extends ChangeNotifier {
   }) async {
     final int requestVersion = ++_portfolioChartRequestVersion;
     final String requestedUserId = SessionManager.userId;
+    final cachedChart = _portfolioChartCache[requestedUserId];
+    final bool hadCachedChart = cachedChart != null;
 
     try {
-      if (!isRefresh) {
+      // Show this client's own cached chart immediately. Keep fetching in the
+      // background so the user still receives the latest server data.
+      if (hadCachedChart) {
+        portfolioChartResponse = cachedChart;
+        _portfolioChartLoading = false;
+        notifyListeners();
+      } else if (!isRefresh) {
         _portfolioChartLoading = true;
         notifyListeners();
       }
@@ -261,11 +275,16 @@ class HomeProvider extends ChangeNotifier {
         }
 
         portfolioChartResponse = parsedChartResponse;
+        _portfolioChartCache[requestedUserId] = parsedChartResponse;
         notifyListeners();
         return true;
       }
 
-      showError(parsedChartResponse.message ?? "Something went wrong");
+      // If a valid cached chart is already on screen, do not replace that
+      // good experience with a generic error banner for a background refresh.
+      if (!hadCachedChart) {
+        showError(parsedChartResponse.message ?? "Something went wrong");
+      }
       return false;
     } catch (e) {
       if (requestVersion != _portfolioChartRequestVersion ||
@@ -283,10 +302,12 @@ class HomeProvider extends ChangeNotifier {
         '${e.runtimeType}: ${e.toString()}',
       );
 
-      if (e is SocketException) {
-        showError("No internet connection. Please check your network.");
-      } else {
-        showError("Something went wrong. Please try again.");
+      if (!hadCachedChart) {
+        if (e is SocketException) {
+          showError("No internet connection. Please check your network.");
+        } else {
+          showError("Something went wrong. Please try again.");
+        }
       }
       return false;
     } finally {
