@@ -1,22 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/model/holdings_detail_response.dart';
 import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/ui/holdings_screen/holding_sort_type.dart';
 import 'package:profit_from_it_investors/ui/holdings_screen/holdings_sort_bottom_sheet.dart';
+import 'package:profit_from_it_investors/ui/authentication/profile_screen/profile_screen.dart';
+import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
 
 class HoldingsScreen extends StatefulWidget {
-  const HoldingsScreen({super.key});
+  final VoidCallback? onGoHome;
+  final VoidCallback? onOpenAnalytics;
+  final VoidCallback? onOpenTaxometer;
+  final VoidCallback? onOpenMovers;
+
+  const HoldingsScreen({
+    super.key,
+    this.onGoHome,
+    this.onOpenAnalytics,
+    this.onOpenTaxometer,
+    this.onOpenMovers,
+  });
 
   @override
   State<HoldingsScreen> createState() => _HoldingsScreenState();
 }
 
 class _HoldingsScreenState extends State<HoldingsScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   String _searchText = '';
@@ -42,13 +57,69 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
     await context.read<HoldingsProvider>().getHoldings(isRefresh: true);
   }
 
+  void _openMenu() {
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  Future<void> _openProfile() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+  }
+
+  Future<void> _openSupportMessages() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SupportMessagesScreen()));
+  }
+
+  void _closeDrawerThen(VoidCallback action) {
+    Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) => action());
+  }
+
+  void _returnToDashboard(VoidCallback? selectTab) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      selectTab?.call();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColor.background,
+      drawer: _buildDrawer(context),
+      drawerScrimColor: const Color(0xFF0F172A).withValues(alpha: .34),
       appBar: AppBar(
-        leading: null,
         automaticallyImplyLeading: false,
+        leadingWidth: 64,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: _openMenu,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F8FC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDDE4EF)),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.menu_rounded,
+                color: AppColor.textPrimary,
+                size: 23,
+              ),
+            ),
+          ),
+        ),
         title: _isSearching
             ? TextField(
                 controller: _searchController,
@@ -245,6 +316,278 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    final user = context.watch<UserProvider>();
+    final name = user.name.trim().isEmpty ? 'Investor' : user.name.trim();
+    final code = user.code.trim();
+    final email = user.email.trim();
+
+    return Drawer(
+      width: MediaQuery.sizeOf(context).width * .82,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
+      backgroundColor: Colors.white,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () => _closeDrawerThen(_openProfile),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF082D59), Color(0xFF0D3CCF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColor.primary.withValues(alpha: .18),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 62,
+                        height: 62,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .15),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .32),
+                            width: 2,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          name.substring(0, 1).toUpperCase(),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 11),
+                      Text(
+                        name,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        code.isNotEmpty
+                            ? 'Client Code: $code'
+                            : (email.isNotEmpty ? email : 'View Profile'),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white.withValues(alpha: .78),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'View Profile',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'NAVIGATION',
+                  style: GoogleFonts.poppins(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.1,
+                    color: AppColor.textLight,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                children: [
+                  _drawerItem(
+                    icon: Icons.home_rounded,
+                    label: 'Home',
+                    onTap: () => _closeDrawerThen(
+                      () => _returnToDashboard(widget.onGoHome),
+                    ),
+                  ),
+                  _drawerItem(
+                    icon: Icons.account_balance_wallet_rounded,
+                    label: 'Holdings',
+                    selected: true,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  _drawerItem(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Analytics',
+                    onTap: () => _closeDrawerThen(
+                      () => _returnToDashboard(widget.onOpenAnalytics),
+                    ),
+                  ),
+                  _drawerItem(
+                    icon: Icons.speed_rounded,
+                    label: 'Taxometer',
+                    onTap: () => _closeDrawerThen(
+                      () => _returnToDashboard(widget.onOpenTaxometer),
+                    ),
+                  ),
+                  _drawerItem(
+                    icon: Icons.trending_up_rounded,
+                    label: 'Movers',
+                    onTap: () => _closeDrawerThen(
+                      () => _returnToDashboard(widget.onOpenMovers),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Divider(height: 1, color: AppColor.divider),
+                  ),
+                  _drawerItem(
+                    icon: Icons.support_agent_rounded,
+                    label: 'Support Messages',
+                    onTap: () => _closeDrawerThen(_openSupportMessages),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColor.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    'Profit From It Investor App',
+                    style: GoogleFonts.poppins(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w500,
+                      color: AppColor.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool selected = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColor.primary.withValues(alpha: .08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColor.primary.withValues(alpha: .12)
+                      : const Color(0xFFF5F7FB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: selected ? AppColor.primary : const Color(0xFF526176),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? AppColor.primary : AppColor.textPrimary,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 19,
+                color: selected ? AppColor.primary : AppColor.textLight,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

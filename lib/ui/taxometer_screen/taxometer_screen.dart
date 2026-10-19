@@ -7,7 +7,9 @@ import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:provider/provider.dart';
 
 class TaxometerScreen extends StatefulWidget {
-  const TaxometerScreen({super.key});
+  final VoidCallback? onOpenMenu;
+
+  const TaxometerScreen({super.key, this.onOpenMenu});
 
   @override
   State<TaxometerScreen> createState() => _TaxometerScreenState();
@@ -42,6 +44,26 @@ class _TaxometerScreenState extends State<TaxometerScreen> {
 
     return Scaffold(
       backgroundColor: AppColor.background,
+      appBar: AppBar(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColor.textPrimary,
+        leading: IconButton(
+          tooltip: 'Menu',
+          onPressed: widget.onOpenMenu,
+          icon: const Icon(Icons.menu_rounded),
+        ),
+        title: Text(
+          'Taxometer',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColor.textPrimary,
+          ),
+        ),
+        centerTitle: false,
+      ),
       body:
           taxometerProvider.taxometerLoading &&
               taxometerProvider.taxometerResponse == null

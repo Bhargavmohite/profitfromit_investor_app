@@ -18,9 +18,24 @@ import 'package:profit_from_it_investors/utility/family_selection_bottom_sheet.d
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
+  final VoidCallback? onOpenMenu;
+  final VoidCallback? onGoHome;
   final VoidCallback? onViewAllHoldings;
+  final VoidCallback? onOpenAnalytics;
+  final VoidCallback? onOpenTaxometer;
+  final VoidCallback? onOpenMovers;
+  final VoidCallback? onOpenProfile;
 
-  const HomeScreen({super.key, this.onViewAllHoldings});
+  const HomeScreen({
+    super.key,
+    this.onOpenMenu,
+    this.onGoHome,
+    this.onViewAllHoldings,
+    this.onOpenAnalytics,
+    this.onOpenTaxometer,
+    this.onOpenMovers,
+    this.onOpenProfile,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -224,13 +239,35 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: widget.onOpenMenu,
+                                      child: Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF6F8FC),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: const Color(0xFFDDE4EF),
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: const Icon(
+                                          Icons.menu_rounded,
+                                          color: AppColor.textPrimary,
+                                          size: 23,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            '$greeting, ${name.isNotEmpty ? name : "User"}',
+                                            greeting,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: GoogleFonts.poppins(
@@ -1406,6 +1443,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                     const SizedBox(height: 16),
 
+                                    _MoreOptionsCard(
+                                      onHome: widget.onGoHome,
+                                      onHoldings: widget.onViewAllHoldings,
+                                      onAnalytics: widget.onOpenAnalytics,
+                                      onTaxometer: widget.onOpenTaxometer,
+                                      onMovers: widget.onOpenMovers,
+                                      onProfile: widget.onOpenProfile,
+                                    ),
+
+                                    const SizedBox(height: 18),
+
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
@@ -1615,6 +1663,212 @@ class _HomeScreenState extends State<HomeScreen> {
       clientSwitchProvider.rollbackPendingSwitch();
     }
   }
+}
+
+
+class _MoreOptionsCard extends StatelessWidget {
+  final VoidCallback? onHome;
+  final VoidCallback? onHoldings;
+  final VoidCallback? onAnalytics;
+  final VoidCallback? onTaxometer;
+  final VoidCallback? onMovers;
+  final VoidCallback? onProfile;
+
+  const _MoreOptionsCard({
+    this.onHome,
+    this.onHoldings,
+    this.onAnalytics,
+    this.onTaxometer,
+    this.onMovers,
+    this.onProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_QuickAccessItem>[
+      _QuickAccessItem(
+        label: 'Home',
+        icon: Icons.home_rounded,
+        background: const Color(0xFFEAF0FF),
+        foreground: AppColor.primary,
+        onTap: onHome,
+      ),
+      _QuickAccessItem(
+        label: 'Holdings',
+        icon: Icons.account_balance_wallet_rounded,
+        background: const Color(0xFFEAF8F2),
+        foreground: const Color(0xFF07865F),
+        onTap: onHoldings,
+      ),
+      _QuickAccessItem(
+        label: 'Analytics',
+        icon: Icons.bar_chart_rounded,
+        background: const Color(0xFFF1ECFF),
+        foreground: const Color(0xFF6D4BD1),
+        onTap: onAnalytics,
+      ),
+      _QuickAccessItem(
+        label: 'Taxometer',
+        icon: Icons.speed_rounded,
+        background: const Color(0xFFFFF3E5),
+        foreground: const Color(0xFFB66A00),
+        onTap: onTaxometer,
+      ),
+      _QuickAccessItem(
+        label: 'Movers',
+        icon: Icons.trending_up_rounded,
+        background: const Color(0xFFEAF8FB),
+        foreground: const Color(0xFF087D92),
+        onTap: onMovers,
+      ),
+      _QuickAccessItem(
+        label: 'Profile',
+        icon: Icons.person_rounded,
+        background: const Color(0xFFF5EEF9),
+        foreground: const Color(0xFF8B4C9C),
+        onTap: onProfile,
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: .035),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'More Options',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColor.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F7FB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Quick Access',
+                  style: GoogleFonts.poppins(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w500,
+                    color: AppColor.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = (constraints.maxWidth - 16) / 3;
+
+              return Wrap(
+                spacing: 8,
+                runSpacing: 9,
+                children: items
+                    .map(
+                      (item) => SizedBox(
+                        width: itemWidth,
+                        child: _QuickAccessButton(item: item),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAccessButton extends StatelessWidget {
+  final _QuickAccessItem item;
+
+  const _QuickAccessButton({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: item.onTap,
+        child: Container(
+          height: 78,
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFAFBFD),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFEEF1F5)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: item.background,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(item.icon, size: 19, color: item.foreground),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 9,
+                  height: 1.1,
+                  fontWeight: FontWeight.w600,
+                  color: AppColor.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAccessItem {
+  final String label;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+  final VoidCallback? onTap;
+
+  const _QuickAccessItem({
+    required this.label,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
 }
 
 class _PortfolioCard extends StatefulWidget {

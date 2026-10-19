@@ -8,7 +8,9 @@ import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
 
 class WatchlistScreen extends StatefulWidget {
-  const WatchlistScreen({super.key});
+  final VoidCallback? onOpenMenu;
+
+  const WatchlistScreen({super.key, this.onOpenMenu});
 
   @override
   State<WatchlistScreen> createState() => _WatchlistScreenState();
@@ -31,6 +33,11 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Menu',
+          onPressed: widget.onOpenMenu,
+          icon: const Icon(Icons.menu_rounded),
+        ),
         title: Text(
           'Top Movers',
           textAlign: TextAlign.center,
@@ -204,8 +211,6 @@ class _MoverToggleButton extends StatelessWidget {
     );
   }
 }
-
-
 
 class _MoverListPage extends StatelessWidget {
   final List<Gainer> items;
