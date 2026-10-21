@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:profit_from_it_investors/model/logout_response.dart';
+import 'package:profit_from_it_investors/model/logout_response.dart' hide Data;
 import 'package:profit_from_it_investors/model/profile_response.dart';
 import 'package:profit_from_it_investors/network/http_request.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
@@ -23,6 +23,39 @@ class ProfileProvider extends ChangeNotifier {
 
   ProfileResponse? profileResponse;
 
+  /// Fetches the active client's profile without changing Profile screen
+  /// loading state, UserProvider data, or showing an error banner.
+  ///
+  /// Home uses this only to decide whether the daily nomination reminder is
+  /// required. If the client changes while the request is in flight, the
+  /// response is ignored so one client's nominee state is never applied to
+  /// another client.
+  Future<Data?> getProfileDataSilently() async {
+    final requestedUserId = SessionManager.userId;
+
+    try {
+      final Response? response = await httpGet(CMD.getProfile);
+
+      if (response == null || SessionManager.userId != requestedUserId) {
+        return null;
+      }
+
+      final parsed = ProfileResponse.fromJson(jsonDecode(response.body));
+
+      if (response.statusCode == 200 &&
+          parsed.status == 200 &&
+          parsed.data != null &&
+          SessionManager.userId == requestedUserId) {
+        return parsed.data;
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('silent profile check failed =======> $e');
+      return null;
+    }
+  }
+
   // Get Profile Function
   Future<bool> getProfile(BuildContext context) async {
     _loginLoading = true;
@@ -34,10 +67,15 @@ class ProfileProvider extends ChangeNotifier {
       if (response == null) return false;
       profileResponse = ProfileResponse.fromJson(jsonDecode(response.body));
 
-      if (profileResponse != null && profileResponse!.status == 200 && profileResponse!.data != null) {
-        Provider.of<UserProvider>(navigatorKey.currentContext!, listen: false).updateUser(
-            name: profileResponse!.data!.name!,
-            image: "",
+      if (profileResponse != null &&
+          profileResponse!.status == 200 &&
+          profileResponse!.data != null) {
+        Provider.of<UserProvider>(
+          navigatorKey.currentContext!,
+          listen: false,
+        ).updateUser(
+          name: profileResponse!.data!.name!,
+          image: "",
           email: profileResponse!.data!.email!.toString(),
           code: profileResponse!.data!.code!.toString(),
           mobile: profileResponse!.data!.mobile!.toString(),
@@ -104,7 +142,10 @@ class ProfileProvider extends ChangeNotifier {
 
   File? selectedImage;
 
-  Future<void> pickProfileImage(BuildContext context, ImageSource imageSource) async {
+  Future<void> pickProfileImage(
+    BuildContext context,
+    ImageSource imageSource,
+  ) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: imageSource);
 
@@ -280,7 +321,6 @@ class ProfileProvider extends ChangeNotifier {
 
   bool get isLogoutLoading => _isLogoutLoading;
 
-
   Future<void> logout() async {
     _isLogoutLoading = true;
     notifyListeners();
@@ -358,5 +398,4 @@ class ProfileProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
 }

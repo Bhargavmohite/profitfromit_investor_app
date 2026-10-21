@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/dashboard_response.dart';
+import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/provider/family/family_provider.dart';
@@ -15,6 +16,8 @@ import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/client_selection_bottom_sheet.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/family_selection_bottom_sheet.dart';
+import 'package:profit_from_it_investors/utility/local_storage.dart';
+import 'package:profit_from_it_investors/utility/session_manager.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -42,6 +45,257 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final Set<String> _nominationChecksStarted = <String>{};
+
+  String _nominationDayKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  void _scheduleNominationCheck({
+    required int? activeClientId,
+    required bool isAccountSwitching,
+  }) {
+    if (activeClientId == null || isAccountSwitching) {
+      return;
+    }
+
+    final checkKey = '$activeClientId:${_nominationDayKey()}';
+    if (_nominationChecksStarted.contains(checkKey)) {
+      return;
+    }
+
+    _nominationChecksStarted.add(checkKey);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+
+      await _checkAndShowNominationPopup(
+        activeClientId: activeClientId,
+        checkKey: checkKey,
+      );
+    });
+  }
+
+  Future<void> _checkAndShowNominationPopup({
+    required int activeClientId,
+    required String checkKey,
+  }) async {
+    final userId = activeClientId.toString();
+
+    // If the user switched again before this check started, do nothing.
+    if (SessionManager.userId != userId) {
+      _nominationChecksStarted.remove(checkKey);
+      return;
+    }
+
+    final alreadyShown = await LocalStorage.wasNominationPromptShownToday(
+      userId,
+    );
+
+    if (!mounted || SessionManager.userId != userId) {
+      return;
+    }
+
+    if (alreadyShown) {
+      return;
+    }
+
+    final profile = await context
+        .read<ProfileProvider>()
+        .getProfileDataSilently();
+
+    if (!mounted || SessionManager.userId != userId) {
+      return;
+    }
+
+    // If the profile request could not be completed, do not guess that the
+    // user has no nominee. A later dashboard refresh / switch can retry.
+    if (profile == null) {
+      _nominationChecksStarted.remove(checkKey);
+      return;
+    }
+
+    final hasNominee = profile.nominees?.isNotEmpty == true;
+    if (hasNominee) {
+      return;
+    }
+
+    // Mark it before opening the dialog so rebuilds cannot show the same
+    // reminder twice on the same day for the same client.
+    await LocalStorage.markNominationPromptShownToday(userId);
+
+    if (!mounted || SessionManager.userId != userId) {
+      return;
+    }
+
+    await _showNominationDialog();
+  }
+
+  Future<void> _showNominationDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 390),
+            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+            decoration: BoxDecoration(
+              color: AppColor.surface,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColor.primary.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_add_alt_1_rounded,
+                    color: AppColor.primary,
+                    size: 31,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Add a Nominee',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColor.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please kindly add a nominee to your account.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    height: 1.55,
+                    color: AppColor.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColor.textSecondary,
+                          side: const BorderSide(color: AppColor.divider),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Remind Me Tomorrow',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              _showNominationComingSoonDialog();
+                            }
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColor.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Add Now',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showNominationComingSoonDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Coming Soon',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w700,
+              color: AppColor.textPrimary,
+            ),
+          ),
+          content: Text(
+            'This feature is under development.',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: AppColor.textSecondary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                'OK',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: AppColor.primary,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _getSafeInitial(String? value) {
     final text = (value ?? '').trim();
 
@@ -103,6 +357,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final String switchingAccountCode = clientSwitchState.isSwitching
         ? (clientSwitchState.selectedClient?.ccode ?? '').trim()
         : '';
+
+    _scheduleNominationCheck(
+      activeClientId: dashboardData?.activeClientId,
+      isAccountSwitching: isAccountSwitching,
+    );
 
     // IMPORTANT:
     // Holdings / Gainers / Losers must come from the SAME Dashboard response.
@@ -247,7 +506,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         height: 42,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFF6F8FC),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           border: Border.all(
                                             color: const Color(0xFFDDE4EF),
                                           ),
@@ -1664,7 +1925,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 }
-
 
 class _MoreOptionsCard extends StatelessWidget {
   final VoidCallback? onHome;

@@ -1,5 +1,3 @@
-
-
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,7 +5,6 @@ import 'package:profit_from_it_investors/model/otp_verification_response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalStorage {
-
   static Future saveAccessToken(String data) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return await prefs.setString('access_token', data);
@@ -121,10 +118,49 @@ class LocalStorage {
     return data;
   }
 
-  /// Remove all
+  static String _nominationPromptDateKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  static Future<bool> wasNominationPromptShownToday(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastShown =
+        prefs.getString('nomination_prompt_last_shown_$userId') ?? '';
+    return lastShown == _nominationPromptDateKey();
+  }
+
+  static Future<void> markNominationPromptShownToday(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nomination_prompt_last_shown_$userId',
+      _nominationPromptDateKey(),
+    );
+  }
+
+  /// Remove login/session data while preserving the once-per-day nomination
+  /// reminder history. This prevents a same-day logout/login from showing the
+  /// reminder twice for the same client.
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
+
+    final nominationHistory = <String, String>{};
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith('nomination_prompt_last_shown_')) {
+        final value = prefs.getString(key);
+        if (value != null) {
+          nominationHistory[key] = value;
+        }
+      }
+    }
+
     await prefs.clear();
+
+    for (final entry in nominationHistory.entries) {
+      await prefs.setString(entry.key, entry.value);
+    }
   }
 
   static Future saveRole(String data) async {

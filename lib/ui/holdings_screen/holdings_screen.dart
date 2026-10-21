@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/model/holdings_detail_response.dart';
 import 'package:profit_from_it_investors/provider/holdings/holdings_provider.dart';
 import 'package:profit_from_it_investors/ui/holdings_screen/holding_sort_type.dart';
@@ -322,9 +323,21 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
 
   Widget _buildDrawer(BuildContext context) {
     final user = context.watch<UserProvider>();
-    final name = user.name.trim().isEmpty ? 'Investor' : user.name.trim();
-    final code = user.code.trim();
-    final email = user.email.trim();
+    final clientSwitchProvider = context.watch<ClientSwitchProvider>();
+    final selectedClient = clientSwitchProvider.selectedClient;
+
+    // Keep the drawer identity in sync with Switch User immediately.
+    // ClientSwitchProvider changes as soon as a client is selected and also
+    // rolls back if the destination dashboard request fails. This means the
+    // sidebar no longer waits for the Profile page to refresh UserProvider.
+    final selectedName = (selectedClient?.name ?? '').trim();
+    final selectedCode = (selectedClient?.ccode ?? '').trim();
+
+    final name = selectedName.isNotEmpty
+        ? selectedName
+        : (user.name.trim().isEmpty ? 'Investor' : user.name.trim());
+    final code = selectedCode.isNotEmpty ? selectedCode : user.code.trim();
+    final email = selectedClient == null ? user.email.trim() : '';
 
     return Drawer(
       width: MediaQuery.sizeOf(context).width * .82,

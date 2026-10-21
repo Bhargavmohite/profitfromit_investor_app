@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/ui/analytics_screen/analytics_screen.dart';
 import 'package:profit_from_it_investors/ui/authentication/profile_screen/profile_screen.dart';
 import 'package:profit_from_it_investors/ui/holdings_screen/holdings_screen.dart';
@@ -25,6 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final List<Widget> _pages;
+  final PageController _pageController = PageController();
   int _index = 0;
 
   static const List<_NavDestination> _destinations = [
@@ -75,8 +77,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _selectTab(int value) {
-    if (!mounted) return;
+    if (!mounted || value < 0 || value >= _pages.length) return;
+
+    if (_index == value) return;
+
+    // Keep bottom navigation, drawer navigation and swipe navigation in sync.
+    // animateToPage gives a smooth transition when a tab is selected by tap.
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        value,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOutCubic,
+      );
+    } else {
+      setState(() => _index = value);
+    }
+  }
+
+  void _onPageChanged(int value) {
+    if (!mounted || _index == value) return;
     setState(() => _index = value);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _openHoldings() async {
@@ -139,15 +165,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return Scaffold(
             key: _scaffoldKey,
             backgroundColor: AppColor.background,
-
-            // Let the page continue behind the floating bottom navigation.
-            // This removes the solid white strip around/outside the rounded tab.
-            extendBody: true,
-
             drawer: _buildDrawer(context),
             drawerScrimColor: const Color(0xFF0F172A).withValues(alpha: .34),
-            body: _pages[_index],
-            bottomNavigationBar: _buildFloatingBottomNavigation(),
+
+            // Keep the floating navigation inside the page Stack instead of
+            // Scaffold.bottomNavigationBar. This removes the extra outer
+            // bottom-bar container completely while preserving the existing
+            // curved white navigation pill exactly as it is.
+            body: Stack(
+              children: [
+                Positioned.fill(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
+                    physics: const PageScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    children: _pages,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _buildFloatingBottomNavigation(),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -161,8 +203,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         height: 68,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-        // Solid floating navigation shell. The area outside the rounded
-        // navigation stays as the page background because extendBody is true.
+        // Keep the existing curved white navigation pill. The area outside
+        // this container is now the page itself, not a bottom-bar wrapper.
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(26),
@@ -239,9 +281,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildDrawer(BuildContext context) {
     final user = context.watch<UserProvider>();
-    final name = user.name.trim().isEmpty ? 'Investor' : user.name.trim();
-    final code = user.code.trim();
-    final email = user.email.trim();
+    final clientSwitchProvider = context.watch<ClientSwitchProvider>();
+    final selectedClient = clientSwitchProvider.selectedClient;
+
+    // Keep the drawer identity in sync with Switch User immediately.
+    // ClientSwitchProvider changes as soon as a client is selected and also
+    // rolls back if the destination dashboard request fails. This means the
+    // sidebar no longer waits for the Profile page to refresh UserProvider.
+    final selectedName = (selectedClient?.name ?? '').trim();
+    final selectedCode = (selectedClient?.ccode ?? '').trim();
+
+    final name = selectedName.isNotEmpty
+        ? selectedName
+        : (user.name.trim().isEmpty ? 'Investor' : user.name.trim());
+    final code = selectedCode.isNotEmpty ? selectedCode : user.code.trim();
+    final email = selectedClient == null ? user.email.trim() : '';
 
     return Drawer(
       width: MediaQuery.sizeOf(context).width * .82,
