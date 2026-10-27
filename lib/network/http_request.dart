@@ -157,3 +157,96 @@ Future<Response?> httpPost(
     rethrow;
   }
 }
+
+Future<Response?> httpMultipartPost(
+  String url,
+  Map<String, String> fields, {
+  String? fileField,
+  String? filePath,
+  String? fileName,
+  List<int>? fileBytes,
+  Map<String, String> headers = const {},
+}) async {
+  final totalWatch = Stopwatch()..start();
+  final uri = Uri.parse('${Constants.apiUrl}$url');
+
+  try {
+    final finalHeaders = Map<String, String>.from(await _buildHeaders(headers));
+
+    // MultipartRequest must generate its own Content-Type header with boundary.
+    finalHeaders.removeWhere((key, _) => key.toLowerCase() == 'content-type');
+
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll(finalHeaders)
+      ..fields.addAll(fields);
+
+    if (fileField != null && fileName != null) {
+      if (filePath != null && filePath.trim().isNotEmpty) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            fileField,
+            filePath,
+            filename: fileName,
+          ),
+        );
+      } else if (fileBytes != null && fileBytes.isNotEmpty) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            fileField,
+            fileBytes,
+            filename: fileName,
+          ),
+        );
+      }
+    }
+
+    final networkWatch = Stopwatch()..start();
+    final streamedResponse = await _httpClient
+        .send(request)
+        .timeout(_requestTimeout);
+    final headersMs = networkWatch.elapsedMilliseconds;
+
+    final bodyWatch = Stopwatch()..start();
+    final responseBody = await streamedResponse.stream.bytesToString();
+    final bodyMs = bodyWatch.elapsedMilliseconds;
+
+    final res = http.Response(
+      responseBody,
+      streamedResponse.statusCode,
+      headers: streamedResponse.headers,
+      request: streamedResponse.request,
+      isRedirect: streamedResponse.isRedirect,
+      persistentConnection: streamedResponse.persistentConnection,
+      reasonPhrase: streamedResponse.reasonPhrase,
+    );
+
+    debugPrint(
+      '[HTTP PERF] MULTIPART POST $url | status=${res.statusCode} '
+      '| headers=${headersMs}ms | body=${bodyMs}ms '
+      '| total=${totalWatch.elapsedMilliseconds}ms '
+      '| bytes=${responseBody.length}',
+    );
+
+    if (res.statusCode == 401) {
+      await LocalStorage.clearAll();
+      nextRoute(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        isClearBackRoutes: true,
+      );
+    }
+
+    return res;
+  } on TimeoutException {
+    debugPrint(
+      '[HTTP PERF] MULTIPART POST $url timed out after '
+      '${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
+  } on SocketException {
+    debugPrint(
+      '[HTTP PERF] MULTIPART POST $url socket error after '
+      '${totalWatch.elapsedMilliseconds}ms',
+    );
+    rethrow;
+  }
+}

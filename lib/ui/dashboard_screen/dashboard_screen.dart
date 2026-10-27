@@ -12,6 +12,7 @@ import 'package:profit_from_it_investors/ui/support_messages/support_messages_sc
 import 'package:profit_from_it_investors/ui/taxometer_screen/taxometer_screen.dart';
 import 'package:profit_from_it_investors/ui/watchlist_screen/watchlist_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
+import 'package:profit_from_it_investors/utility/notification_service.dart';
 import 'package:profit_from_it_investors/utility/style.dart';
 import 'package:provider/provider.dart';
 
@@ -65,11 +66,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onOpenTaxometer: () => _selectTab(2),
         onOpenMovers: () => _selectTab(3),
         onOpenProfile: _openProfile,
+        onOpenSupportMessages: () =>
+            _openSupportMessages(nominationRequest: true),
       ),
       AnalyticsScreen(onOpenMenu: _openMenu),
       TaxometerScreen(onOpenMenu: _openMenu),
       WatchlistScreen(onOpenMenu: _openMenu),
     ];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await NotificationService.openPendingSupportTicketIfPossible();
+    });
   }
 
   void _openMenu() {
@@ -124,10 +131,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
-  Future<void> _openSupportMessages() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SupportMessagesScreen()));
+  Future<void> _openSupportMessages({bool nominationRequest = false}) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            SupportMessagesScreen(nominationRequest: nominationRequest),
+      ),
+    );
   }
 
   void _closeDrawerThen(VoidCallback action) {

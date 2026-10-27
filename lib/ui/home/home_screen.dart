@@ -20,6 +20,8 @@ import 'package:profit_from_it_investors/utility/local_storage.dart';
 import 'package:profit_from_it_investors/utility/session_manager.dart';
 import 'package:provider/provider.dart';
 
+enum _NominationDialogAction { later, addNow }
+
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onOpenMenu;
   final VoidCallback? onGoHome;
@@ -28,6 +30,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onOpenTaxometer;
   final VoidCallback? onOpenMovers;
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenSupportMessages;
 
   const HomeScreen({
     super.key,
@@ -38,6 +41,7 @@ class HomeScreen extends StatefulWidget {
     this.onOpenTaxometer,
     this.onOpenMovers,
     this.onOpenProfile,
+    this.onOpenSupportMessages,
   });
 
   @override
@@ -137,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showNominationDialog() async {
-    await showDialog<void>(
+    final action = await showDialog<_NominationDialogAction>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -200,7 +204,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        onPressed: () => Navigator.of(
+                          dialogContext,
+                        ).pop(_NominationDialogAction.later),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColor.textSecondary,
                           side: const BorderSide(color: AppColor.divider),
@@ -210,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         child: Text(
-                          'Remind Me Tomorrow',
+                          'Later',
                           style: GoogleFonts.poppins(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
@@ -222,12 +228,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.of(dialogContext).pop();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              _showNominationComingSoonDialog();
-                            }
-                          });
+                          Navigator.of(
+                            dialogContext,
+                          ).pop(_NominationDialogAction.addNow);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColor.primary,
@@ -255,45 +258,21 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-  }
 
-  Future<void> _showNominationComingSoonDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Coming Soon',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w700,
-              color: AppColor.textPrimary,
-            ),
-          ),
-          content: Text(
-            'This feature is under development.',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: AppColor.textSecondary,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
-                'OK',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  color: AppColor.primary,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    if (!mounted || action != _NominationDialogAction.addNow) {
+      return;
+    }
+
+    // Do not push a new route while the dialog Overlay is still being
+    // deactivated. Let the dialog route complete its teardown first, then
+    // open Support Messages from the stable Home context.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
+    if (!mounted) {
+      return;
+    }
+
+    widget.onOpenSupportMessages?.call();
   }
 
   String _getSafeInitial(String? value) {

@@ -23,6 +23,7 @@ import 'package:profit_from_it_investors/provider/transaction_provider/transacti
 import 'package:profit_from_it_investors/provider/watchlist_provider/watchlist_provider.dart';
 import 'package:profit_from_it_investors/theme/app_theme.dart';
 import 'package:profit_from_it_investors/ui/splash_screen/splash_screen.dart';
+import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/constant.dart';
 import 'package:profit_from_it_investors/utility/session_manager.dart';
@@ -89,6 +90,20 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: SplashScreen(),
+        onGenerateRoute: (settings) {
+          if (settings.name == '/support-ticket') {
+            final int? ticketId = settings.arguments is int
+                ? settings.arguments as int
+                : int.tryParse(settings.arguments?.toString() ?? '');
+
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => SupportMessagesScreen(initialTicketId: ticketId),
+            );
+          }
+
+          return null;
+        },
       ),
     );
   }
