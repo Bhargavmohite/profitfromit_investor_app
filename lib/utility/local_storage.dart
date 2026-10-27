@@ -140,6 +140,29 @@ class LocalStorage {
     );
   }
 
+  static const String _whatsNewCompletedAppSignatureKey =
+      'whats_new_completed_app_signature';
+
+  static Future<void> saveWhatsNewCompletedAppSignature(
+    String signature,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_whatsNewCompletedAppSignatureKey, signature);
+  }
+
+  static Future<String> getWhatsNewCompletedAppSignature() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_whatsNewCompletedAppSignatureKey) ?? '';
+  }
+
+  static Future<bool> hasExistingAppStateForWhatsNew() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    return prefs.getKeys().any(
+      (key) => key != _whatsNewCompletedAppSignatureKey,
+    );
+  }
+
   /// Remove login/session data while preserving the once-per-day nomination
   /// reminder history. This prevents a same-day logout/login from showing the
   /// reminder twice for the same client.
@@ -156,10 +179,21 @@ class LocalStorage {
       }
     }
 
+    // Device-level release state should survive logout/login.
+    final whatsNewSignature =
+        prefs.getString(_whatsNewCompletedAppSignatureKey) ?? '';
+
     await prefs.clear();
 
     for (final entry in nominationHistory.entries) {
       await prefs.setString(entry.key, entry.value);
+    }
+
+    if (whatsNewSignature.isNotEmpty) {
+      await prefs.setString(
+        _whatsNewCompletedAppSignatureKey,
+        whatsNewSignature,
+      );
     }
   }
 

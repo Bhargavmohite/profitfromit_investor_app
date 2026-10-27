@@ -3,10 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
+import 'package:profit_from_it_investors/network/whats_new_service.dart';
 import 'package:profit_from_it_investors/provider/app_update_provider/app_update_provider.dart';
 import 'package:profit_from_it_investors/ui/app_update/app_update_prompt.dart';
 import 'package:profit_from_it_investors/ui/authentication/login_screen/login_screen.dart';
 import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new/whats_new_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/app_images.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
@@ -119,9 +121,7 @@ class _SplashScreenState extends State<SplashScreen>
     final accessToken = await LocalStorage.getAccessToken();
     final userId = await LocalStorage.getId();
 
-    // Keep startup responsive. The previous 2500 ms hard minimum plus the
-    // network-based update check made launch-to-Home noticeably slower.
-    // Update checking is fail-open already, so cap how long it may block launch.
+    // Keep startup responsive while checking mandatory/optional updates.
     await Future.wait([
       Future.delayed(const Duration(milliseconds: 800)),
       appUpdateProvider.checkForUpdate().timeout(
@@ -130,9 +130,7 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     ]);
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     // ---------------------------------------------------------------
     // Mandatory update
@@ -150,28 +148,45 @@ class _SplashScreenState extends State<SplashScreen>
     // ---------------------------------------------------------------
     // Optional update
     // ---------------------------------------------------------------
-    // User requested:
-    // - Update Now -> open Play Store / App Store.
-    // - Maybe Later -> close the app.
-    //
-    // Therefore we do NOT continue to Login/Dashboard after the
-    // optional update dialog is dismissed.
     if (appUpdateProvider.isOptionalUpdate) {
       await AppUpdatePrompt.showOptional(context);
+      return;
+    }
+
+    final isVerifiedLogin = accessToken.isNotEmpty && userId.isNotEmpty;
+
+    // ---------------------------------------------------------------
+    // What's New
+    // ---------------------------------------------------------------
+    // First install: does not show.
+    // App version/build changed: fetch backend release and show once.
+    // API unavailable: continue normally and retry on a later launch.
+    final whatsNewDecision = await WhatsNewService.checkAfterAppUpdate();
+
+    if (!mounted) return;
+
+    if (whatsNewDecision.shouldShow && whatsNewDecision.release != null) {
+      nextRoute(
+        MaterialPageRoute(
+          builder: (context) => WhatsNewScreen(
+            release: whatsNewDecision.release!,
+            currentVersion: whatsNewDecision.currentVersion,
+            currentBuild: whatsNewDecision.currentBuild,
+            isLoggedIn: isVerifiedLogin,
+          ),
+        ),
+        isClearBackRoutes: true,
+      );
       return;
     }
 
     // ---------------------------------------------------------------
     // Normal authentication flow
     // ---------------------------------------------------------------
-    final isVerifiedLogin = accessToken.isNotEmpty && userId.isNotEmpty;
-
     if (isVerifiedLogin) {
       await userProvider.loadUserInfo();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       nextRoute(
         MaterialPageRoute(builder: (context) => const DashboardScreen()),

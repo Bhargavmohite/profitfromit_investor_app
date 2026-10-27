@@ -23,6 +23,7 @@ class CMD {
 
   // Public app update/version check.
   static const String appVersion = "app-version";
+  static const String whatsNew = "whats-new";
 
   static const String netContributionDetails = "net-contribution-details";
   static const String dividendDetails = "dividend-details";

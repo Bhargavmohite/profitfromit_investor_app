@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:profit_from_it_investors/network/whats_new_service.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
@@ -11,6 +13,7 @@ import 'package:profit_from_it_investors/ui/home/home_screen.dart';
 import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/ui/taxometer_screen/taxometer_screen.dart';
 import 'package:profit_from_it_investors/ui/watchlist_screen/watchlist_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new/whats_new_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/notification_service.dart';
 import 'package:profit_from_it_investors/utility/style.dart';
@@ -136,6 +139,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(
         builder: (_) =>
             SupportMessagesScreen(nominationRequest: nominationRequest),
+      ),
+    );
+  }
+
+  Future<void> _openWhatsNew() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    final currentVersion = packageInfo.version.trim();
+    final currentBuild = packageInfo.buildNumber.trim();
+
+    if (!mounted) return;
+
+    // Show a small loading indicator while the latest backend release
+    // is fetched. This keeps the sidebar action responsive and ensures
+    // the page always opens with the newest API data.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColor.primary),
+      ),
+    );
+
+    final release = await WhatsNewService.fetchLatestRelease(
+      version: currentVersion,
+      build: currentBuild,
+    );
+
+    if (!mounted) return;
+
+    // Close loading dialog.
+    Navigator.of(context, rootNavigator: true).pop();
+
+    if (release == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to load What’s New. Please try again.'),
+        ),
+      );
+      return;
+    }
+
+    if (release.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No What’s New updates are available right now.'),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WhatsNewScreen(
+          release: release,
+          currentVersion: currentVersion,
+          currentBuild: currentBuild,
+          isLoggedIn: true,
+          manualMode: true,
+        ),
       ),
     );
   }
@@ -472,6 +535,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.support_agent_rounded,
                     label: 'Support Messages',
                     onTap: () => _closeDrawerThen(_openSupportMessages),
+                  ),
+                  _drawerItem(
+                    icon: Icons.new_releases_rounded,
+                    label: 'What’s New',
+                    onTap: () => _closeDrawerThen(_openWhatsNew),
                   ),
                 ],
               ),
