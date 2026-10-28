@@ -2614,7 +2614,7 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
                       _fieldLabel('Department'),
                       const SizedBox(height: 7),
                       DropdownButtonFormField<String>(
-                        value: _department,
+                        initialValue: _department,
                         isExpanded: true,
                         style: _inputTextStyle(),
                         decoration: _inputDecoration(
@@ -2654,7 +2654,7 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
                         const SizedBox(height: 7),
                         DropdownButtonFormField<String>(
                           key: ValueKey<String?>(_department),
-                          value: issueOptions.contains(_issueType)
+                          initialValue: issueOptions.contains(_issueType)
                               ? _issueType
                               : null,
                           isExpanded: true,

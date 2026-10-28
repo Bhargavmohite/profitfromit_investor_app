@@ -361,7 +361,7 @@ class _HeaderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D3CCF).withOpacity(.18),
+            color: const Color(0xFF0D3CCF).withValues(alpha: .18),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -377,7 +377,7 @@ class _HeaderCard extends StatelessWidget {
               height: 135,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(.07),
+                color: Colors.white.withValues(alpha: .07),
               ),
             ),
           ),
@@ -392,7 +392,7 @@ class _HeaderCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.12),
+                      color: Colors.white.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -421,7 +421,7 @@ class _HeaderCard extends StatelessWidget {
                     style: GoogleFonts.poppins(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(.78),
+                      color: Colors.white.withValues(alpha: .78),
                     ),
                   ),
                 ],
@@ -442,7 +442,7 @@ class _HeaderCard extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white.withOpacity(.88),
+                  color: Colors.white.withValues(alpha: .88),
                 ),
               ),
               const SizedBox(height: 16),
@@ -452,7 +452,7 @@ class _HeaderCard extends StatelessWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.10),
+                  color: Colors.white.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -460,7 +460,7 @@ class _HeaderCard extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white.withOpacity(.88),
+                    color: Colors.white.withValues(alpha: .88),
                   ),
                 ),
               ),
@@ -495,7 +495,7 @@ class _UpdateCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE6EBF2)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(.035),
+            color: const Color(0xFF0F172A).withValues(alpha: .035),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -751,7 +751,7 @@ class _VimeoEmbedPlayerState extends State<_VimeoEmbedPlayer> {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: widget.accent.withOpacity(.10),
+                    color: widget.accent.withValues(alpha: .10),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -804,7 +804,7 @@ class _ContinueBar extends StatelessWidget {
         border: const Border(top: BorderSide(color: Color(0xFFE6EBF2))),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(.05),
+            color: const Color(0xFF0F172A).withValues(alpha: .05),
             blurRadius: 16,
             offset: const Offset(0, -5),
           ),
