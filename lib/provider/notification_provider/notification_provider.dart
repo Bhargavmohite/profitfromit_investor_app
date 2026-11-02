@@ -26,7 +26,9 @@ class AppNotificationProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      final Response? response = await httpGet('${CMD.notifications}?limit=100');
+      final Response? response = await httpGet(
+        '${CMD.notifications}?limit=100',
+      );
       if (response == null) {
         return false;
       }
@@ -40,9 +42,11 @@ class AppNotificationProvider extends ChangeNotifier {
         return true;
       }
 
-      showError(parsed.message.isNotEmpty
-          ? parsed.message
-          : 'Unable to load notifications.');
+      showError(
+        parsed.message.isNotEmpty
+            ? parsed.message
+            : 'Unable to load notifications.',
+      );
       return false;
     } catch (e) {
       debugPrint('notifications api error =====> $e');
@@ -58,6 +62,26 @@ class AppNotificationProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Opening the Notifications screen automatically acknowledges unread items
+  /// returned by the API. The badge is updated from the server response only
+  /// after a successful mark-read request (no misleading zero on failure).
+  ///
+  /// The existing API marks individual IDs. The client requests 100 items at
+  /// a time, so older unread notifications beyond that window may require a
+  /// backend mark-all capability to reach zero for very large histories.
+  Future<bool> loadAndMarkAllAsRead({bool showLoader = true}) async {
+    final loaded = await getNotifications(showLoader: showLoader);
+    if (!loaded) return false;
+
+    final unreadIds = _notifications
+        .where((notification) => !notification.isRead && notification.id > 0)
+        .map((notification) => notification.id)
+        .toSet();
+
+    if (unreadIds.isEmpty) return true;
+    return markAsRead(unreadIds);
   }
 
   Future<bool> markAsRead(Iterable<int> notificationIds) async {
@@ -81,9 +105,11 @@ class AppNotificationProvider extends ChangeNotifier {
 
       final parsed = appNotificationResponseFromJson(response.body);
       if (parsed.status != 200) {
-        showError(parsed.message.isNotEmpty
-            ? parsed.message
-            : 'Unable to mark notifications as read.');
+        showError(
+          parsed.message.isNotEmpty
+              ? parsed.message
+              : 'Unable to mark notifications as read.',
+        );
         return false;
       }
 
@@ -96,7 +122,8 @@ class AppNotificationProvider extends ChangeNotifier {
         }
       }
 
-      _unreadCount = parsed.data?.unreadCount ??
+      _unreadCount =
+          parsed.data?.unreadCount ??
           _notifications.where((item) => !item.isRead).length;
 
       notifyListeners();

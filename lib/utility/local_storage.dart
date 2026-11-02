@@ -143,6 +143,10 @@ class LocalStorage {
   static const String _whatsNewCompletedAppSignatureKey =
       'whats_new_completed_app_signature';
 
+  // Seasonal greeting is a device-level flag, not an authenticated session.
+  static const String _diwali2026SeenKey =
+      'profit_from_it_diwali_2026_seen_v2';
+
   static Future<void> saveWhatsNewCompletedAppSignature(
     String signature,
   ) async {
@@ -159,7 +163,8 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
 
     return prefs.getKeys().any(
-      (key) => key != _whatsNewCompletedAppSignatureKey,
+      (key) => key != _whatsNewCompletedAppSignatureKey &&
+          key != _diwali2026SeenKey,
     );
   }
 
@@ -179,9 +184,10 @@ class LocalStorage {
       }
     }
 
-    // Device-level release state should survive logout/login.
+    // Device-level release and seasonal greeting state must survive logout.
     final whatsNewSignature =
         prefs.getString(_whatsNewCompletedAppSignatureKey) ?? '';
+    final diwaliSeen = prefs.getBool(_diwali2026SeenKey) ?? false;
 
     await prefs.clear();
 
@@ -194,6 +200,10 @@ class LocalStorage {
         _whatsNewCompletedAppSignatureKey,
         whatsNewSignature,
       );
+    }
+
+    if (diwaliSeen) {
+      await prefs.setBool(_diwali2026SeenKey, true);
     }
   }
 

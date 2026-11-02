@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:profit_from_it_investors/app/widgets/seasonal/diwali_greeting_gate.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -210,61 +211,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
+    return DiwaliGreetingGate(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
 
-        if (_index != 0) {
-          _selectTab(0);
-          return;
-        }
-
-        final shouldExit = await _showExitDialog();
-        if (shouldExit) {
-          SystemNavigator.pop();
-        }
-      },
-      child: Consumer<ProfileProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLogoutLoading) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(color: AppColor.primary),
-              ),
-            );
+          if (_index != 0) {
+            _selectTab(0);
+            return;
           }
 
-          return Scaffold(
-            key: _scaffoldKey,
-            backgroundColor: AppColor.background,
-            drawer: _buildDrawer(context),
-            drawerScrimColor: const Color(0xFF0F172A).withValues(alpha: .34),
-
-            // Keep the floating navigation inside the page Stack instead of
-            // Scaffold.bottomNavigationBar. This removes the extra outer
-            // bottom-bar container completely while preserving the existing
-            // curved white navigation pill exactly as it is.
-            body: Stack(
-              children: [
-                Positioned.fill(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: _onPageChanged,
-                    physics: const PageScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
-                    children: _pages,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: _buildFloatingBottomNavigation(),
-                ),
-              ],
-            ),
-          );
+          final shouldExit = await _showExitDialog();
+          if (shouldExit) {
+            SystemNavigator.pop();
+          }
         },
+        child: Consumer<ProfileProvider>(
+          builder: (context, provider, child) {
+            if (provider.isLogoutLoading) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(color: AppColor.primary),
+                ),
+              );
+            }
+
+            return Scaffold(
+              key: _scaffoldKey,
+              backgroundColor: AppColor.background,
+              drawer: _buildDrawer(context),
+              drawerScrimColor: const Color(0xFF0F172A).withValues(alpha: .34),
+
+              // Keep the floating navigation inside the page Stack instead of
+              // Scaffold.bottomNavigationBar. This removes the extra outer
+              // bottom-bar container completely while preserving the existing
+              // curved white navigation pill exactly as it is.
+              body: Stack(
+                children: [
+                  Positioned.fill(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: _onPageChanged,
+                      physics: const PageScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      children: _pages,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: _buildFloatingBottomNavigation(),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

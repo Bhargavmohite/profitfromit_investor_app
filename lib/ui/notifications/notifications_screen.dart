@@ -22,7 +22,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppNotificationProvider>().getNotifications();
+      if (!mounted) return;
+      // Opening the screen automatically marks all loaded unread items as read.
+      // No selection or additional button tap is required.
+      context.read<AppNotificationProvider>().loadAndMarkAllAsRead();
     });
   }
 
@@ -43,7 +46,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _toggleSelectAll(List<AppNotificationItem> notifications) {
     setState(() {
       final allIds = notifications.map((item) => item.id).where((id) => id > 0);
-      final allSelected = notifications.isNotEmpty &&
+      final allSelected =
+          notifications.isNotEmpty &&
           allIds.every((id) => _selectedIds.contains(id));
 
       if (allSelected) {
@@ -59,9 +63,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _markSelectedAsRead() async {
     if (_selectedIds.isEmpty) return;
 
-    final success = await context
-        .read<AppNotificationProvider>()
-        .markAsRead(_selectedIds);
+    final success = await context.read<AppNotificationProvider>().markAsRead(
+      _selectedIds,
+    );
 
     if (!mounted) return;
 
@@ -78,7 +82,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Consumer<AppNotificationProvider>(
       builder: (context, provider, _) {
         final notifications = provider.notifications;
-        final allSelected = notifications.isNotEmpty &&
+        final allSelected =
+            notifications.isNotEmpty &&
             notifications
                 .map((item) => item.id)
                 .where((id) => id > 0)
@@ -140,10 +145,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 : [
                     IconButton(
                       tooltip: 'Refresh',
-                      onPressed: provider.isLoading
+                      onPressed: provider.isLoading || provider.isMarkingRead
                           ? null
                           : () {
-                              provider.getNotifications(showLoader: false);
+                              provider.loadAndMarkAllAsRead(showLoader: false);
                             },
                       icon: const Icon(Icons.refresh_rounded),
                     ),
@@ -157,15 +162,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      border: Border(
-                        top: BorderSide(color: AppColor.divider),
-                      ),
+                      border: Border(top: BorderSide(color: AppColor.divider)),
                     ),
                     child: SizedBox(
                       height: 48,
                       child: ElevatedButton.icon(
-                        onPressed:
-                            provider.isMarkingRead ? null : _markSelectedAsRead,
+                        onPressed: provider.isMarkingRead
+                            ? null
+                            : _markSelectedAsRead,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColor.primary,
                           foregroundColor: Colors.white,
@@ -209,7 +213,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (provider.notifications.isEmpty) {
       return RefreshIndicator(
         onRefresh: () async {
-          await provider.getNotifications(showLoader: false);
+          await provider.loadAndMarkAllAsRead(showLoader: false);
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -252,8 +256,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return RefreshIndicator(
       onRefresh: () async {
-          await provider.getNotifications(showLoader: false);
-        },
+        await provider.loadAndMarkAllAsRead(showLoader: false);
+      },
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         itemCount: provider.notifications.length,
@@ -363,8 +367,9 @@ class _NotificationTile extends StatelessWidget {
                             notification.title,
                             style: GoogleFonts.poppins(
                               fontSize: 13.5,
-                              fontWeight:
-                                  unread ? FontWeight.w700 : FontWeight.w600,
+                              fontWeight: unread
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                               color: AppColor.textPrimary,
                             ),
                           ),
