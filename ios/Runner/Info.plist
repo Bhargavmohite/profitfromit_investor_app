@@ -66,6 +66,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is used to take photos for uploading when required in the app.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location access is used only while using the app when a feature requires your current location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is used to select and upload images when required in the app.</string>
 	<key>UIBackgroundModes</key>
