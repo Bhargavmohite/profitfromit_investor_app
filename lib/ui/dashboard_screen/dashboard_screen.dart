@@ -72,6 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onOpenProfile: _openProfile,
         onOpenSupportMessages: () =>
             _openSupportMessages(nominationRequest: true),
+        onOpenSupportTickets: () => _openSupportMessages(),
       ),
       AnalyticsScreen(onOpenMenu: _openMenu),
       TaxometerScreen(onOpenMenu: _openMenu),

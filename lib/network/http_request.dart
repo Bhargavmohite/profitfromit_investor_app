@@ -181,15 +181,33 @@ Future<Response?> httpMultipartPost(
       ..fields.addAll(fields);
 
     if (fileField != null && fileName != null) {
+      // Prefer the actual picker-created file on disk. Streaming the source
+      // file avoids an unnecessary in-memory copy and preserves the exact
+      // binary payload for Excel/PDF/image attachments. Picker paths are
+      // temporary, but this upload starts immediately while the cache file is
+      // still available. Fall back to picker-provided bytes when no readable
+      // path exists (for example on web/virtual-file providers).
+      bool attachedFromPath = false;
       if (filePath != null && filePath.trim().isNotEmpty) {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            fileField,
-            filePath,
-            filename: fileName,
-          ),
-        );
-      } else if (fileBytes != null && fileBytes.isNotEmpty) {
+        final pickedFile = File(filePath);
+        if (await pickedFile.exists()) {
+          final fileLength = await pickedFile.length();
+          if (fileLength <= 0) {
+            throw const FormatException('Selected attachment is empty.');
+          }
+
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              fileField,
+              pickedFile.path,
+              filename: fileName,
+            ),
+          );
+          attachedFromPath = true;
+        }
+      }
+
+      if (!attachedFromPath && fileBytes != null && fileBytes.isNotEmpty) {
         request.files.add(
           http.MultipartFile.fromBytes(
             fileField,
@@ -249,4 +267,30 @@ Future<Response?> httpMultipartPost(
     );
     rethrow;
   }
+}
+
+/// Download raw binary attachment bytes without JSON/string conversion.
+/// Authorization is sent only to the configured API host to avoid token leaks
+/// through third-party storage or signed URLs.
+Future<http.Response> httpDownloadAttachment(Uri uri) async {
+  final apiHost = Uri.parse(Constants.apiUrl).host;
+  final headers = <String, String>{'Accept': 'application/octet-stream, */*'};
+  if (uri.host.toLowerCase() == apiHost.toLowerCase()) {
+    final token = await LocalStorage.getAccessToken();
+    if (token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
+    if (SessionManager.userId.isNotEmpty) {
+      headers['user-id'] = SessionManager.userId;
+    }
+  }
+  final request = http.Request('GET', uri)..headers.addAll(headers);
+  final streamed = await _httpClient.send(request).timeout(_requestTimeout);
+  final bytes = await streamed.stream.toBytes();
+  return http.Response.bytes(
+    bytes,
+    streamed.statusCode,
+    headers: streamed.headers,
+    request: streamed.request,
+    isRedirect: streamed.isRedirect,
+    reasonPhrase: streamed.reasonPhrase,
+  );
 }

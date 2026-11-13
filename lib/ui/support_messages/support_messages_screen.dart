@@ -1,13 +1,124 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:profit_from_it_investors/network/http_request.dart';
+import 'package:profit_from_it_investors/utility/constant.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/notification_service.dart';
+
+const int _supportMaxAttachmentBytes = 10 * 1024 * 1024;
+const List<String> _supportDocumentExtensions = <String>[
+  'pdf',
+  'xls',
+  'xlsx',
+  'csv',
+];
+const List<String> _supportImageExtensions = <String>[
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+];
+
+String _supportFileExtension(String fileName) {
+  final dot = fileName.lastIndexOf('.');
+  if (dot < 0 || dot == fileName.length - 1) return '';
+  return fileName.substring(dot + 1).toLowerCase();
+}
+
+bool _isAllowedSupportImage(String fileName) =>
+    _supportImageExtensions.contains(_supportFileExtension(fileName));
+
+bool _supportFileMatchesSignature(Uint8List data, String fileName) {
+  if (data.isEmpty) return false;
+
+  bool startsWith(List<int> bytes) {
+    if (data.length < bytes.length) return false;
+    for (int i = 0; i < bytes.length; i++) {
+      if (data[i] != bytes[i]) return false;
+    }
+    return true;
+  }
+
+  final extension = _supportFileExtension(fileName);
+  switch (extension) {
+    case 'xlsx':
+      // Modern Office files are ZIP containers.
+      return startsWith(<int>[0x50, 0x4b, 0x03, 0x04]);
+    case 'xls':
+      // Legacy OLE compound document. Some XML-based Excel exports use XML.
+      return startsWith(<int>[0xd0, 0xcf, 0x11, 0xe0]) ||
+          startsWith(<int>[0x3c, 0x3f, 0x78, 0x6d, 0x6c]);
+    case 'pdf':
+      return startsWith(<int>[0x25, 0x50, 0x44, 0x46]);
+    case 'png':
+      return startsWith(<int>[137, 80, 78, 71, 13, 10, 26, 10]);
+    case 'jpg':
+    case 'jpeg':
+      return startsWith(<int>[255, 216, 255]);
+    case 'webp':
+      return data.length >= 12 &&
+          startsWith(<int>[82, 73, 70, 70]) &&
+          String.fromCharCodes(data.sublist(8, 12)) == 'WEBP';
+    case 'csv':
+      // CSV has no fixed magic number. Reject binary/NUL-filled payloads.
+      return !data.contains(0);
+    default:
+      return false;
+  }
+}
+
+Future<String?> _supportPickedFileProblem(PlatformFile file) async {
+  if (file.size <= 0) return 'The selected attachment is empty.';
+
+  // Validate the same on-disk file that the multipart helper will prefer.
+  // This avoids treating a picker-provided in-memory copy as authoritative
+  // when the platform also supplied a readable cache path.
+  final path = file.path?.trim();
+  if (path != null && path.isNotEmpty) {
+    final pickedFile = File(path);
+    if (await pickedFile.exists()) {
+      final actualSize = await pickedFile.length();
+      if (actualSize <= 0) return 'The selected attachment is empty.';
+      if (actualSize != file.size) {
+        return 'The selected attachment could not be read completely. Please select it again.';
+      }
+
+      final handle = await pickedFile.open();
+      try {
+        final sample = await handle.read(4096);
+        if (!_supportFileMatchesSignature(
+          Uint8List.fromList(sample),
+          file.name,
+        )) {
+          return 'The selected file content does not match its ${_supportFileExtension(file.name).toUpperCase()} extension.';
+        }
+      } finally {
+        await handle.close();
+      }
+      return null;
+    }
+  }
+
+  final bytes = file.bytes;
+  if (bytes == null || bytes.isEmpty) {
+    return 'Unable to read the selected attachment. Please select it again.';
+  }
+  if (bytes.length != file.size) {
+    return 'The selected attachment could not be read completely. Please select it again.';
+  }
+  if (!_supportFileMatchesSignature(bytes, file.name)) {
+    return 'The selected file content does not match its ${_supportFileExtension(file.name).toUpperCase()} extension.';
+  }
+
+  return null;
+}
 
 class SupportMessagesScreen extends StatefulWidget {
   final bool nominationRequest;
@@ -623,7 +734,7 @@ class _SupportMessagesScreenState extends State<SupportMessagesScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'To request nominee addition, tap the + button. Investment and Adding the Nominee will be selected automatically for you.',
+              'To request nominee addition, tap the + button. Investment Related Problem and Nomination Request will be selected automatically for you.',
               style: GoogleFonts.poppins(
                 fontSize: 10.5,
                 height: 1.45,
@@ -1164,6 +1275,8 @@ class _SupportMessage {
   final String? attachmentName;
   final int? attachmentSize;
   final String? createdAt;
+  final String? attachmentUrl;
+  final String? deliveryStatus;
 
   const _SupportMessage({
     required this.id,
@@ -1173,13 +1286,35 @@ class _SupportMessage {
     required this.attachmentName,
     required this.attachmentSize,
     required this.createdAt,
+    required this.attachmentUrl,
+    required this.deliveryStatus,
   });
 
   bool get isAdmin => senderType.trim().toLowerCase() == 'admin';
 
   factory _SupportMessage.fromJson(Map<String, dynamic> json) {
+    final messageId = int.tryParse(json['id']?.toString() ?? '') ?? 0;
+    final suppliedAttachmentUrl =
+        (json['attachment_url'] ??
+                json['download_url'] ??
+                json['attachment_download_url'] ??
+                json['file_url'])
+            ?.toString()
+            .trim();
+
+    // Some support-ticket API responses contain attachment metadata but do
+    // not include an attachment_url. The backend download contract is based
+    // on the support message id, so create the authenticated API endpoint
+    // here instead of making the UI depend on an optional response field.
+    final effectiveAttachmentUrl =
+        suppliedAttachmentUrl != null && suppliedAttachmentUrl.isNotEmpty
+        ? suppliedAttachmentUrl
+        : (messageId > 0
+              ? '${Constants.apiUrl}support-tickets/attachments/$messageId'
+              : null);
+
     return _SupportMessage(
-      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      id: messageId,
       senderType: json['sender_type']?.toString() ?? 'client',
       message: json['message']?.toString() ?? '',
       hasAttachment:
@@ -1188,6 +1323,15 @@ class _SupportMessage {
       attachmentName: json['attachment_name']?.toString(),
       attachmentSize: int.tryParse(json['attachment_size']?.toString() ?? ''),
       createdAt: json['created_at']?.toString(),
+      attachmentUrl: effectiveAttachmentUrl,
+      deliveryStatus:
+          (json['delivery_status'] ??
+                  json['message_status'] ??
+                  (json['read_at'] != null ? 'read' : null) ??
+                  (json['delivered_at'] != null ? 'delivered' : null) ??
+                  json['status'])
+              ?.toString()
+              .toLowerCase(),
     );
   }
 }
@@ -1534,7 +1678,14 @@ class _SupportTicketConversationScreenState
 
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isPickingReplyAttachment = false;
+  PlatformFile? _replyAttachment;
+  int? _replyAttachmentSize;
   bool _isConversationPolling = false;
+  bool _isDownloadingAttachment = false;
+  int? _downloadingMessageId;
+  bool _adminIsTyping = false;
+  DateTime? _lastTypingNotice;
   String? _errorMessage;
   _SupportTicket? _ticket;
   List<_SupportMessage> _messages = <_SupportMessage>[];
@@ -1543,6 +1694,7 @@ class _SupportTicketConversationScreenState
   @override
   void initState() {
     super.initState();
+    _replyController.addListener(_onReplyChanged);
     _loadConversation().then((_) {
       if (mounted) {
         _startConversationAutoRefresh();
@@ -1575,6 +1727,7 @@ class _SupportTicketConversationScreenState
   @override
   void dispose() {
     _conversationPollTimer?.cancel();
+    _replyController.removeListener(_onReplyChanged);
     _replyController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1633,6 +1786,14 @@ class _SupportTicketConversationScreenState
         ticket = _SupportTicket.fromJson(Map<String, dynamic>.from(rawTicket));
       }
 
+      final typingValue =
+          data['admin_typing'] ??
+          data['is_admin_typing'] ??
+          (data['typing'] is Map ? data['typing']['admin'] : null);
+      final adminTyping =
+          typingValue == true ||
+          typingValue == 1 ||
+          typingValue?.toString() == '1';
       final previousMessageCount = _messages.length;
 
       final messages = <_SupportMessage>[];
@@ -1653,6 +1814,7 @@ class _SupportTicketConversationScreenState
       setState(() {
         _ticket = ticket;
         _messages = messages;
+        _adminIsTyping = adminTyping;
         _errorMessage = null;
       });
 
@@ -1675,12 +1837,275 @@ class _SupportTicketConversationScreenState
     }
   }
 
+  // Typing receipts are best effort. The server must support this route and
+  // provide admin_typing in the conversation response for remote indicators.
+  void _onReplyChanged() {
+    if (_replyController.text.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_lastTypingNotice != null &&
+        now.difference(_lastTypingNotice!) < const Duration(seconds: 3)) {
+      return;
+    }
+    _lastTypingNotice = now;
+    httpPost('support-tickets/${widget.ticketId}/typing', {
+      'is_typing': true,
+    }).catchError((Object _) => null);
+  }
+
+  bool _looksLikeExpectedFile(Uint8List data, String name) {
+    if (data.isEmpty) return false;
+    final prefix = String.fromCharCodes(data.take(64)).trimLeft().toLowerCase();
+    if (prefix.startsWith('<!doctype html') ||
+        prefix.startsWith('<html') ||
+        prefix.startsWith('{"') ||
+        prefix.startsWith('{\n')) {
+      return false;
+    }
+    return _supportFileMatchesSignature(data, name);
+  }
+
+  Future<void> _downloadAttachment(_SupportMessage message) async {
+    if (_isDownloadingAttachment || !message.hasAttachment) return;
+    final filename = (message.attachmentName ?? 'attachment')
+        .split('/')
+        .last
+        .split('\\')
+        .last
+        .replaceAll(RegExp(r'[\x00-\x1f]'), '_');
+    if (filename.isEmpty) return;
+    setState(() {
+      _isDownloadingAttachment = true;
+      _downloadingMessageId = message.id;
+    });
+    try {
+      // Use a URL supplied by the API when available. Older/current ticket
+      // responses may expose only the message id + attachment metadata, so
+      // fall back to the authenticated binary endpoint that is part of this
+      // app's API contract.
+      final raw = message.attachmentUrl?.trim();
+      final apiBase = Uri.parse(Constants.apiUrl);
+      late final Uri resolved;
+
+      if (raw == null || raw.isEmpty) {
+        resolved = apiBase.resolve('support-tickets/attachments/${message.id}');
+      } else {
+        final uri = Uri.tryParse(raw);
+        if (uri == null) {
+          throw const FormatException('Invalid attachment URL.');
+        }
+        resolved = uri.hasScheme
+            ? uri
+            : (raw.startsWith('/')
+                  ? apiBase.resolve(raw)
+                  : apiBase.resolve(raw));
+      }
+
+      if (resolved.scheme != 'https' && resolved.scheme != 'http') {
+        throw const FormatException('Unsupported attachment URL.');
+      }
+      final response = await httpDownloadAttachment(resolved);
+      if (response.statusCode != 200) {
+        throw FormatException('Download failed (HTTP ${response.statusCode}).');
+      }
+      final bytes = response.bodyBytes;
+      if (!_looksLikeExpectedFile(bytes, filename)) {
+        throw const FormatException(
+          'The server returned a different file format. The attachment cannot be saved safely.',
+        );
+      }
+      if (!mounted) return;
+      final saved = await FilePicker.saveFile(
+        dialogTitle: 'Save ticket attachment',
+        fileName: filename,
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      if (saved != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Saved $filename')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to download attachment: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloadingAttachment = false;
+          _downloadingMessageId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickReplyDocumentAttachment() async {
+    if (_isPickingReplyAttachment || _isSending) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _isPickingReplyAttachment = true);
+
+    try {
+      final result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: _supportDocumentExtensions,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) return;
+      await _setReplyAttachment(result.files.single);
+    } catch (_) {
+      if (!mounted) return;
+      _showReplyAttachmentError(
+        'Unable to open file picker. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _isPickingReplyAttachment = false);
+    }
+  }
+
+  Future<void> _pickReplyImageAttachment() async {
+    if (_isPickingReplyAttachment || _isSending) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _isPickingReplyAttachment = true);
+
+    try {
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: _supportImageExtensions,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) return;
+
+      final PlatformFile file = result.files.single;
+
+      if (!_isAllowedSupportImage(file.name)) {
+        _showReplyAttachmentError(
+          'Only JPG, JPEG, PNG and WEBP images are allowed.',
+        );
+        return;
+      }
+
+      await _setReplyAttachment(file);
+    } catch (_) {
+      if (!mounted) return;
+      _showReplyAttachmentError(
+        'Unable to open image picker. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _isPickingReplyAttachment = false);
+    }
+  }
+
+  Future<void> _setReplyAttachment(PlatformFile file) async {
+    if (file.size > _supportMaxAttachmentBytes) {
+      _showReplyAttachmentError('Maximum attachment size is 10 MB.');
+      return;
+    }
+
+    final extension = _supportFileExtension(file.name);
+    final allowed =
+        _supportDocumentExtensions.contains(extension) ||
+        _supportImageExtensions.contains(extension);
+
+    if (!allowed) {
+      _showReplyAttachmentError(
+        'Allowed: PDF, XLS, XLSX, CSV, JPG, JPEG, PNG and WEBP only.',
+      );
+      return;
+    }
+
+    final pickedFileProblem = await _supportPickedFileProblem(file);
+    if (pickedFileProblem != null) {
+      _showReplyAttachmentError(pickedFileProblem);
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _replyAttachment = file;
+      _replyAttachmentSize = file.size;
+    });
+  }
+
+  void _showReplyAttachmentError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _removeReplyAttachment() {
+    if (_isSending) return;
+    setState(() {
+      _replyAttachment = null;
+      _replyAttachmentSize = null;
+    });
+  }
+
+  String _formatReplyAttachmentSize() {
+    final bytes = _replyAttachmentSize ?? 0;
+    if (bytes <= 0) return '';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String _formatAttachmentSize(int? bytes) {
+    final value = bytes ?? 0;
+
+    if (value <= 0) {
+      return '';
+    }
+
+    if (value < 1024) {
+      return '$value B';
+    }
+
+    if (value < 1024 * 1024) {
+      return '${(value / 1024).toStringAsFixed(1)} KB';
+    }
+
+    return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   Future<void> _sendReply() async {
     if (_isSending) return;
 
     final message = _replyController.text.trim();
+    final attachment = _replyAttachment;
 
-    if (message.isEmpty) {
+    if (message.isEmpty && attachment == null) {
+      return;
+    }
+
+    if (attachment != null &&
+        (attachment.path == null || attachment.path!.trim().isEmpty) &&
+        (attachment.bytes == null || attachment.bytes!.isEmpty)) {
+      _showReplyAttachmentError(
+        'Unable to access the selected attachment. Please select it again.',
+      );
       return;
     }
 
@@ -1688,9 +2113,13 @@ class _SupportTicketConversationScreenState
     FocusManager.instance.primaryFocus?.unfocus();
 
     try {
-      final response = await httpPost(
+      final response = await httpMultipartPost(
         'support-tickets/${widget.ticketId}/reply',
         {'message': message},
+        fileField: attachment != null ? 'attachment' : null,
+        filePath: attachment?.path,
+        fileName: attachment?.name,
+        fileBytes: attachment?.bytes,
       );
 
       if (!mounted) return;
@@ -1699,6 +2128,10 @@ class _SupportTicketConversationScreenState
           response.statusCode >= 200 &&
           response.statusCode < 300) {
         _replyController.clear();
+        setState(() {
+          _replyAttachment = null;
+          _replyAttachmentSize = null;
+        });
         await _loadConversation(showLoader: false);
 
         if (!mounted) return;
@@ -1743,39 +2176,16 @@ class _SupportTicketConversationScreenState
     }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
   String _formatDate(String? raw) {
     if (raw == null || raw.trim().isEmpty) return '';
 
     try {
       return DateFormat(
-        'dd MMM yyyy • hh:mm a',
+        'dd MMM • hh:mm a',
       ).format(DateTime.parse(raw).toLocal());
     } catch (_) {
       return raw;
     }
-  }
-
-  String _formatAttachmentSize(int? bytes) {
-    if (bytes == null || bytes <= 0) return '';
-
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Widget _buildMessage(_SupportMessage message) {
@@ -1835,39 +2245,61 @@ class _SupportTicketConversationScreenState
                   if (message.hasAttachment) ...[
                     if (message.message.trim().isNotEmpty)
                       const SizedBox(height: 9),
-                    Container(
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(
-                        color: isAdmin
-                            ? const Color(0xFFF8FAFC)
-                            : Colors.white.withValues(alpha: .10),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.attach_file_rounded,
-                            size: 17,
-                            color: isAdmin ? AppColor.primary : Colors.white,
-                          ),
-                          const SizedBox(width: 7),
-                          Flexible(
-                            child: Text(
-                              message.attachmentName ?? 'Attachment',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                                color: isAdmin
-                                    ? AppColor.textPrimary
-                                    : Colors.white,
+                    InkWell(
+                      onTap: _isDownloadingAttachment
+                          ? null
+                          : () => _downloadAttachment(message),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: isAdmin
+                              ? const Color(0xFFF8FAFC)
+                              : Colors.white.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.attach_file_rounded,
+                              size: 17,
+                              color: isAdmin ? AppColor.primary : Colors.white,
+                            ),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                message.attachmentName ?? 'Attachment',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAdmin
+                                      ? AppColor.textPrimary
+                                      : Colors.white,
+                                ),
                               ),
                             ),
-                          ),
-                          finalSizeWidget(message, isAdmin),
-                        ],
+                            finalSizeWidget(message, isAdmin),
+                            const SizedBox(width: 5),
+                            _downloadingMessageId == message.id
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.download_rounded,
+                                    size: 17,
+                                    color: isAdmin
+                                        ? AppColor.primary
+                                        : Colors.white,
+                                  ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1878,12 +2310,34 @@ class _SupportTicketConversationScreenState
               const SizedBox(height: 4),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  date,
-                  style: GoogleFonts.poppins(
-                    fontSize: 8.5,
-                    color: AppColor.textLight,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      date,
+                      style: GoogleFonts.poppins(
+                        fontSize: 8.5,
+                        color: AppColor.textLight,
+                      ),
+                    ),
+                    if (!isAdmin) ...[
+                      const SizedBox(width: 5),
+                      Icon(
+                        message.deliveryStatus == 'read' ||
+                                message.deliveryStatus == 'seen'
+                            ? Icons.done_all_rounded
+                            : message.deliveryStatus == 'delivered'
+                            ? Icons.done_all_rounded
+                            : Icons.done_rounded,
+                        size: 15,
+                        color:
+                            message.deliveryStatus == 'read' ||
+                                message.deliveryStatus == 'seen'
+                            ? const Color(0xFF2196F3)
+                            : AppColor.textLight,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -2014,6 +2468,30 @@ class _SupportTicketConversationScreenState
               ),
             ),
           Expanded(child: _buildConversation()),
+          if (_adminIsTyping && !_isLoading)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 5,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Support Team is typing',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: AppColor.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    const _TypingDots(),
+                  ],
+                ),
+              ),
+            ),
           if (!_isLoading && ticket != null)
             SafeArea(
               top: false,
@@ -2041,77 +2519,190 @@ class _SupportTicketConversationScreenState
                           ),
                         ),
                       )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _replyController,
-                              minLines: 1,
-                              maxLines: 4,
-                              textInputAction: TextInputAction.newline,
-                              style: GoogleFonts.poppins(
-                                fontSize: 11.5,
-                                color: AppColor.textPrimary,
+                          if (_replyAttachment != null) ...[
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
                               ),
-                              decoration: InputDecoration(
-                                hintText: 'Write a reply...',
-                                hintStyle: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: AppColor.textLight,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFDCE3ED),
                                 ),
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 13,
-                                  vertical: 11,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFDCE3ED),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFDCE3ED),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                  borderSide: const BorderSide(
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _isAllowedSupportImage(
+                                          _replyAttachment!.name,
+                                        )
+                                        ? Icons.image_rounded
+                                        : Icons.insert_drive_file_rounded,
+                                    size: 18,
                                     color: AppColor.primary,
                                   ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 46,
-                            height: 46,
-                            child: ElevatedButton(
-                              onPressed: _isSending ? null : _sendReply,
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                backgroundColor: AppColor.primary,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: _isSending
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _replyAttachment!.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColor.textPrimary,
                                       ),
-                                    )
-                                  : const Icon(Icons.send_rounded, size: 20),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatReplyAttachmentSize(),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 8.5,
+                                      color: AppColor.textSecondary,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Remove attachment',
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: _isSending
+                                        ? null
+                                        : _removeReplyAttachment,
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                      color: AppColor.danger,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                          ],
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: 42,
+                                height: 46,
+                                child: IconButton(
+                                  tooltip: 'Attach file',
+                                  onPressed:
+                                      (_isSending || _isPickingReplyAttachment)
+                                      ? null
+                                      : _pickReplyDocumentAttachment,
+                                  icon: const Icon(
+                                    Icons.attach_file_rounded,
+                                    color: AppColor.primary,
+                                    size: 21,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 42,
+                                height: 46,
+                                child: IconButton(
+                                  tooltip: 'Upload photo / screenshot',
+                                  onPressed:
+                                      (_isSending || _isPickingReplyAttachment)
+                                      ? null
+                                      : _pickReplyImageAttachment,
+                                  icon: _isPickingReplyAttachment
+                                      ? const SizedBox(
+                                          width: 17,
+                                          height: 17,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColor.primary,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.image_outlined,
+                                          color: AppColor.primary,
+                                          size: 22,
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: TextField(
+                                  controller: _replyController,
+                                  minLines: 1,
+                                  maxLines: 4,
+                                  textInputAction: TextInputAction.newline,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11.5,
+                                    color: AppColor.textPrimary,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Write a reply...',
+                                    hintStyle: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: AppColor.textLight,
+                                    ),
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 13,
+                                      vertical: 11,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFDCE3ED),
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFDCE3ED),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                      borderSide: const BorderSide(
+                                        color: AppColor.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 46,
+                                height: 46,
+                                child: ElevatedButton(
+                                  onPressed: _isSending ? null : _sendReply,
+                                  style: ElevatedButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    backgroundColor: AppColor.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: _isSending
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.send_rounded,
+                                          size: 20,
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2191,6 +2782,7 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
 
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _otherIssueTypeController;
 
   String? _department;
   String? _issueType;
@@ -2206,37 +2798,42 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
       text: widget.nominationRequest ? 'Nominee Addition Request' : '',
     );
     _descriptionController = TextEditingController();
-    _department = widget.nominationRequest ? 'Investment' : null;
-    _issueType = widget.nominationRequest ? 'Adding the Nominee' : null;
+    _otherIssueTypeController = TextEditingController();
+    _department = widget.nominationRequest
+        ? 'Investment Related Problem'
+        : null;
+    _issueType = widget.nominationRequest ? 'Nomination Request' : null;
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _otherIssueTypeController.dispose();
     super.dispose();
   }
 
   List<String> _issueTypesFor(String? department) {
     switch (department) {
-      case 'Technical Issue':
+      case 'Website & App Related':
         return const [
-          'Login / OTP Issue',
-          'Data Not Loading',
-          'App Crash / Error',
-          'Connectivity / Server Issue',
+          'Login / OTP Problem',
+          'Website / App Not Opening',
+          'Portfolio / Data Not Updating',
+          'Navigation / Display Problem',
+          'Notification Problem',
+          'Feature / Functionality Problem',
         ];
-      case 'App Related Issue':
+      case 'Accounts related Problem':
         return const [
-          'UI / Display Issue',
-          'Navigation Issue',
-          'Notification Issue',
-          'Feature Request',
+          'Fee / Payment Problem',
+          'Invoice / Receipt Query',
+          'Ledger / Statement Discrepancy',
+          'Bank / Payment Details Update',
         ];
-      case 'Investment':
-        return const ['Adding the Nominee'];
-      case 'Other':
-        return const ['Other Query'];
+      case 'Investment Related Problem':
+        return const ['Nomination Request'];
+      case 'Others':
       default:
         return const [];
     }
@@ -2247,8 +2844,8 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
     Navigator.of(context).pop();
   }
 
-  Future<void> _pickAttachment() async {
-    if (_isPickingAttachment) return;
+  Future<void> _pickDocumentAttachment() async {
+    if (_isPickingAttachment || _isSubmitting) return;
 
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _isPickingAttachment = true);
@@ -2256,54 +2853,90 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
     try {
       final FilePickerResult? result = await FilePicker.pickFiles(
         allowMultiple: false,
+        withData: true,
         type: FileType.custom,
-        allowedExtensions: const [
-          'jpg',
-          'jpeg',
-          'png',
-          'pdf',
-          'doc',
-          'docx',
-          'xls',
-          'xlsx',
-        ],
+        allowedExtensions: _supportDocumentExtensions,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) return;
+      await _setSelectedAttachment(result.files.single);
+    } catch (_) {
+      if (!mounted) return;
+      _showAttachmentError('Unable to open file picker. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isPickingAttachment = false);
+    }
+  }
+
+  Future<void> _pickImageAttachment() async {
+    if (_isPickingAttachment || _isSubmitting) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _isPickingAttachment = true);
+
+    try {
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: _supportImageExtensions,
       );
 
       if (!mounted || result == null || result.files.isEmpty) return;
 
       final PlatformFile file = result.files.single;
-      final int fileSize = file.size;
-      const maxAttachmentBytes = 10 * 1024 * 1024;
 
-      if (fileSize > maxAttachmentBytes) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              content: Text('Please select a file smaller than 10 MB.'),
-            ),
-          );
+      if (!_isAllowedSupportImage(file.name)) {
+        _showAttachmentError(
+          'Only JPG, JPEG, PNG and WEBP images are allowed.',
+        );
         return;
       }
 
-      setState(() {
-        _selectedAttachment = file;
-        _selectedAttachmentSize = fileSize;
-      });
+      await _setSelectedAttachment(file);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Unable to open file picker. Please try again.'),
-          ),
-        );
+      _showAttachmentError('Unable to open image picker. Please try again.');
     } finally {
-      if (mounted) {
-        setState(() => _isPickingAttachment = false);
-      }
+      if (mounted) setState(() => _isPickingAttachment = false);
     }
+  }
+
+  Future<void> _setSelectedAttachment(PlatformFile file) async {
+    if (file.size > _supportMaxAttachmentBytes) {
+      _showAttachmentError('Maximum attachment size is 10 MB.');
+      return;
+    }
+
+    final extension = _supportFileExtension(file.name);
+    final allowed =
+        _supportDocumentExtensions.contains(extension) ||
+        _supportImageExtensions.contains(extension);
+
+    if (!allowed) {
+      _showAttachmentError(
+        'Allowed: PDF, XLS, XLSX, CSV, JPG, JPEG, PNG and WEBP only.',
+      );
+      return;
+    }
+
+    final pickedFileProblem = await _supportPickedFileProblem(file);
+    if (pickedFileProblem != null) {
+      _showAttachmentError(pickedFileProblem);
+      return;
+    }
+
+    setState(() {
+      _selectedAttachment = file;
+      _selectedAttachmentSize = file.size;
+    });
+  }
+
+  void _showAttachmentError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _removeAttachment() {
@@ -2329,12 +2962,16 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
     }
 
     final department = _department;
-    final issueType = _issueType;
+    final issueType = department == 'Others'
+        ? _otherIssueTypeController.text.trim()
+        : _issueType?.trim();
 
-    if (department == null || issueType == null) {
+    if (department == null || issueType == null || issueType.isEmpty) {
       return;
     }
 
+    // The backend now validates and stores the same category names
+    // displayed in the app, so send the selected category directly.
     final attachment = _selectedAttachment;
 
     if (attachment != null &&
@@ -2409,12 +3046,6 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
       final decoded = jsonDecode(body);
 
       if (decoded is Map<String, dynamic>) {
-        final message = decoded['message'];
-
-        if (message is String && message.trim().isNotEmpty) {
-          return message.trim();
-        }
-
         final errors = decoded['errors'];
 
         if (errors is Map) {
@@ -2427,6 +3058,12 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
               return value.trim();
             }
           }
+        }
+
+        final message = decoded['message'];
+
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
         }
       }
     } catch (_) {
@@ -2611,73 +3248,96 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      _fieldLabel('Department'),
+                      _fieldLabel('Category'),
                       const SizedBox(height: 7),
                       DropdownButtonFormField<String>(
                         initialValue: _department,
                         isExpanded: true,
                         style: _inputTextStyle(),
                         decoration: _inputDecoration(
-                          hint: 'Select department',
-                          icon: Icons.apartment_rounded,
+                          hint: 'Select category',
+                          icon: Icons.category_outlined,
                         ),
                         items: const [
                           DropdownMenuItem(
-                            value: 'Technical Issue',
-                            child: Text('Technical Issue'),
+                            value: 'Website & App Related',
+                            child: Text('Website & App Related'),
                           ),
                           DropdownMenuItem(
-                            value: 'App Related Issue',
-                            child: Text('App Related Issue'),
+                            value: 'Accounts related Problem',
+                            child: Text('Accounts related Problem'),
                           ),
                           DropdownMenuItem(
-                            value: 'Investment',
-                            child: Text('Investment'),
+                            value: 'Investment Related Problem',
+                            child: Text('Investment Related Problem'),
                           ),
                           DropdownMenuItem(
-                            value: 'Other',
-                            child: Text('Other'),
+                            value: 'Others',
+                            child: Text('Others'),
                           ),
                         ],
                         onChanged: (value) {
                           setState(() {
                             _department = value;
                             _issueType = null;
+                            if (value != 'Others') {
+                              _otherIssueTypeController.clear();
+                            }
                           });
                         },
                         validator: (value) =>
-                            value == null ? 'Please select a department' : null,
+                            value == null ? 'Please select a category' : null,
                       ),
                       if (_department != null) ...[
                         const SizedBox(height: 16),
                         _fieldLabel('Issue Type'),
                         const SizedBox(height: 7),
-                        DropdownButtonFormField<String>(
-                          key: ValueKey<String?>(_department),
-                          initialValue: issueOptions.contains(_issueType)
-                              ? _issueType
-                              : null,
-                          isExpanded: true,
-                          style: _inputTextStyle(),
-                          decoration: _inputDecoration(
-                            hint: 'Select issue type',
-                            icon: Icons.tune_rounded,
+                        if (_department == 'Others')
+                          TextFormField(
+                            controller: _otherIssueTypeController,
+                            textInputAction: TextInputAction.next,
+                            style: _inputTextStyle(),
+                            decoration: _inputDecoration(
+                              hint: 'Enter issue type',
+                              icon: Icons.edit_note_rounded,
+                            ),
+                            onChanged: (value) {
+                              _issueType = value.trim();
+                            },
+                            validator: (value) {
+                              if ((value ?? '').trim().isEmpty) {
+                                return 'Please enter an issue type';
+                              }
+                              return null;
+                            },
+                          )
+                        else
+                          DropdownButtonFormField<String>(
+                            key: ValueKey<String?>(_department),
+                            initialValue: issueOptions.contains(_issueType)
+                                ? _issueType
+                                : null,
+                            isExpanded: true,
+                            style: _inputTextStyle(),
+                            decoration: _inputDecoration(
+                              hint: 'Select issue type',
+                              icon: Icons.tune_rounded,
+                            ),
+                            items: issueOptions
+                                .map(
+                                  (option) => DropdownMenuItem<String>(
+                                    value: option,
+                                    child: Text(option),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() => _issueType = value);
+                            },
+                            validator: (value) => value == null
+                                ? 'Please select an issue type'
+                                : null,
                           ),
-                          items: issueOptions
-                              .map(
-                                (option) => DropdownMenuItem<String>(
-                                  value: option,
-                                  child: Text(option),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() => _issueType = value);
-                          },
-                          validator: (value) => value == null
-                              ? 'Please select an issue type'
-                              : null,
-                        ),
                       ],
                       const SizedBox(height: 16),
                       _fieldLabel('Description'),
@@ -2703,108 +3363,153 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
                       const SizedBox(height: 16),
                       _fieldLabel('Attachment'),
                       const SizedBox(height: 7),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: (_isPickingAttachment || _isSubmitting)
-                            ? null
-                            : _pickAttachment,
-                        child: Container(
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: (_isPickingAttachment || _isSubmitting)
+                                  ? null
+                                  : _pickDocumentAttachment,
+                              icon: const Icon(
+                                Icons.attach_file_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                'File',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColor.primary,
+                                minimumSize: const Size.fromHeight(46),
+                                side: const BorderSide(
+                                  color: Color(0xFFDCE3ED),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: (_isPickingAttachment || _isSubmitting)
+                                  ? null
+                                  : _pickImageAttachment,
+                              icon: _isPickingAttachment
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColor.primary,
+                                      ),
+                                    )
+                                  : const Icon(Icons.image_outlined, size: 19),
+                              label: Text(
+                                'Photo / Screenshot',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColor.primary,
+                                minimumSize: const Size.fromHeight(46),
+                                side: const BorderSide(
+                                  color: Color(0xFFDCE3ED),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        'PDF, XLS, XLSX, CSV, JPG, JPEG, PNG, WEBP • Max 10 MB',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9.2,
+                          color: AppColor.textSecondary,
+                        ),
+                      ),
+                      if (_selectedAttachment != null) ...[
+                        const SizedBox(height: 9),
+                        Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
+                            horizontal: 12,
+                            vertical: 10,
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: _selectedAttachment != null
-                                  ? AppColor.primary.withValues(alpha: .45)
-                                  : const Color(0xFFDCE3ED),
+                              color: AppColor.primary.withValues(alpha: .35),
                             ),
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: const Color(0xFFE7ECF3),
-                                  ),
-                                ),
-                                child: _isPickingAttachment
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(10),
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppColor.primary,
-                                        ),
-                                      )
-                                    : Icon(
-                                        _selectedAttachment != null
-                                            ? Icons.insert_drive_file_rounded
-                                            : Icons.attach_file_rounded,
-                                        size: 20,
-                                        color: AppColor.primary,
-                                      ),
+                              Icon(
+                                _isAllowedSupportImage(
+                                      _selectedAttachment!.name,
+                                    )
+                                    ? Icons.image_rounded
+                                    : Icons.insert_drive_file_rounded,
+                                color: AppColor.primary,
+                                size: 20,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _selectedAttachment?.name ??
-                                          'Add Attachment',
+                                      _selectedAttachment!.name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.poppins(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                         color: AppColor.textPrimary,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      _selectedAttachment != null
-                                          ? _formatFileSize(
-                                              _selectedAttachmentSize ?? 0,
-                                            )
-                                          : 'Image, PDF, Word or Excel • Max 10 MB',
+                                      _formatFileSize(
+                                        _selectedAttachmentSize ?? 0,
+                                      ),
                                       style: GoogleFonts.poppins(
-                                        fontSize: 9.5,
+                                        fontSize: 9,
                                         color: AppColor.textSecondary,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              if (_selectedAttachment != null)
-                                IconButton(
-                                  tooltip: 'Remove attachment',
-                                  onPressed: _isSubmitting
-                                      ? null
-                                      : _removeAttachment,
-                                  visualDensity: VisualDensity.compact,
-                                  icon: const Icon(
-                                    Icons.close_rounded,
-                                    size: 20,
-                                    color: AppColor.danger,
-                                  ),
-                                )
-                              else
-                                const Icon(
-                                  Icons.add_circle_outline_rounded,
+                              IconButton(
+                                tooltip: 'Remove attachment',
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : _removeAttachment,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.close_rounded,
                                   size: 20,
-                                  color: AppColor.primary,
+                                  color: AppColor.danger,
                                 ),
+                              ),
                             ],
                           ),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 22),
                       SizedBox(
                         width: double.infinity,
@@ -2851,4 +3556,45 @@ class _NewTicketFormSheetState extends State<_NewTicketFormSheet> {
       ),
     );
   }
+}
+
+/// Three-dot animated typing indicator; displayed only on server typing state.
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (index) {
+        final phase = (_controller.value * 3 - index) % 3;
+        final active = phase >= 0 && phase < 1;
+        return Container(
+          width: 6,
+          height: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColor.primary.withValues(alpha: active ? 1 : .25),
+          ),
+        );
+      }),
+    ),
+  );
 }
