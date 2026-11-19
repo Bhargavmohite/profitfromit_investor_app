@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 
 import 'package:excel_community/excel_community.dart' as xls;
 import 'package:file_saver/file_saver.dart';
@@ -17,7 +18,12 @@ class NetContributionScreen extends StatefulWidget {
 }
 
 class _NetContributionScreenState extends State<NetContributionScreen>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        AppActivityRouteAware<NetContributionScreen> {
+  @override
+  String get activityScreenKey => 'net_contribution';
+
   late final TabController _tabController;
 
   bool _isExporting = false;

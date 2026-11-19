@@ -66,6 +66,7 @@ class Data {
   String? totalLoser;
 
   List<TopHolding>? topHoldings;
+  List<DailyGainHolding>? todayGainHoldings;
   List<FamilyList>? familyList;
 
   // Full portfolio-performance curve returned by Dashboard API.
@@ -100,6 +101,7 @@ class Data {
     this.totalGainer,
     this.totalLoser,
     this.topHoldings,
+    this.todayGainHoldings,
     this.familyList,
     this.portfolioCurve,
   });
@@ -195,6 +197,14 @@ class Data {
             json["top_holdings"].map((x) => TopHolding.fromJson(x)),
           ),
 
+    todayGainHoldings: json["today_gain_holdings"] == null
+        ? null
+        : List<DailyGainHolding>.from(
+            json["today_gain_holdings"].map(
+              (x) => DailyGainHolding.fromJson(x),
+            ),
+          ),
+
     familyList: json["family_list"] == null
         ? []
         : List<FamilyList>.from(
@@ -243,6 +253,10 @@ class Data {
     "top_holdings": topHoldings == null
         ? []
         : List<dynamic>.from(topHoldings!.map((x) => x.toJson())),
+
+    "today_gain_holdings": todayGainHoldings == null
+        ? null
+        : List<dynamic>.from(todayGainHoldings!.map((x) => x.toJson())),
 
     "family_list": familyList == null
         ? []
@@ -405,5 +419,52 @@ class TopHolding {
     "gain_percent": gainPercent,
     "todays": todays,
     "todays_percentage": todaysPercentage,
+  };
+}
+
+/// One currently held security in Today's Gain/Loss breakdown.
+/// [dayChangePercent] is the price move of ONE share (independent of quantity).
+/// [dayPnl] is that stock's total monetary contribution for the held quantity.
+class DailyGainHolding {
+  final String isin;
+  final String nseSymbol;
+  final String companyName;
+  final double cmp;
+  final double quantity;
+  final double dayChangePercent;
+  final double dayPnl;
+
+  const DailyGainHolding({
+    required this.isin,
+    required this.nseSymbol,
+    required this.companyName,
+    required this.cmp,
+    required this.quantity,
+    required this.dayChangePercent,
+    required this.dayPnl,
+  });
+
+  static double _number(dynamic value) =>
+      double.tryParse(value?.toString() ?? '') ?? 0.0;
+
+  factory DailyGainHolding.fromJson(Map<String, dynamic> json) =>
+      DailyGainHolding(
+        isin: json['isin']?.toString() ?? '',
+        nseSymbol: json['nse_symbol']?.toString() ?? '',
+        companyName: json['company_name']?.toString() ?? '',
+        cmp: _number(json['cmp']),
+        quantity: _number(json['quantity']),
+        dayChangePercent: _number(json['day_change_percent']),
+        dayPnl: _number(json['day_pnl']),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'isin': isin,
+    'nse_symbol': nseSymbol,
+    'company_name': companyName,
+    'cmp': cmp,
+    'quantity': quantity,
+    'day_change_percent': dayChangePercent,
+    'day_pnl': dayPnl,
   };
 }

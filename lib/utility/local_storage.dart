@@ -144,8 +144,7 @@ class LocalStorage {
       'whats_new_completed_app_signature';
 
   // Seasonal greeting is a device-level flag, not an authenticated session.
-  static const String _diwali2026SeenKey =
-      'profit_from_it_diwali_2026_seen_v2';
+  static const String _diwali2026SeenKey = 'profit_from_it_diwali_2026_seen_v2';
 
   static Future<void> saveWhatsNewCompletedAppSignature(
     String signature,
@@ -163,20 +162,20 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
 
     return prefs.getKeys().any(
-      (key) => key != _whatsNewCompletedAppSignatureKey &&
-          key != _diwali2026SeenKey,
+      (key) =>
+          key != _whatsNewCompletedAppSignatureKey && key != _diwali2026SeenKey,
     );
   }
 
-  /// Remove login/session data while preserving the once-per-day nomination
-  /// reminder history. This prevents a same-day logout/login from showing the
-  /// reminder twice for the same client.
+  /// Remove login/session data while preserving per-user, per-day nomination
+  /// and video-story history. Logging out and back in must not repeat them.
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
 
     final nominationHistory = <String, String>{};
     for (final key in prefs.getKeys()) {
-      if (key.startsWith('nomination_prompt_last_shown_')) {
+      if (key.startsWith('nomination_prompt_last_shown_') ||
+          key.startsWith('daily_whats_new_story_seen_')) {
         final value = prefs.getString(key);
         if (value != null) {
           nominationHistory[key] = value;
@@ -188,8 +187,17 @@ class LocalStorage {
     final whatsNewSignature =
         prefs.getString(_whatsNewCompletedAppSignatureKey) ?? '';
     final diwaliSeen = prefs.getBool(_diwali2026SeenKey) ?? false;
+    // An anonymous installation UUID is needed to detect app updates across
+    // logouts. It is not a login token or a hardware/device identifier.
+    final activityInstallationId =
+        prefs.getString('app_activity_installation_id') ?? '';
 
     await prefs.clear();
+
+    if (activityInstallationId.isNotEmpty) {
+      await prefs.setString(
+        'app_activity_installation_id', activityInstallationId);
+    }
 
     for (final entry in nominationHistory.entries) {
       await prefs.setString(entry.key, entry.value);

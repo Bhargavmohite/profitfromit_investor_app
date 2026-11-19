@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:profit_from_it_investors/app/widgets/seasonal/diwali_greeting_gate.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:profit_from_it_investors/network/whats_new_service.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/ui/analytics_screen/analytics_screen.dart';
@@ -14,7 +13,8 @@ import 'package:profit_from_it_investors/ui/home/home_screen.dart';
 import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/ui/taxometer_screen/taxometer_screen.dart';
 import 'package:profit_from_it_investors/ui/watchlist_screen/watchlist_screen.dart';
-import 'package:profit_from_it_investors/ui/whats_new/whats_new_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new/whats_new_feature_hub.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/notification_service.dart';
 import 'package:profit_from_it_investors/utility/style.dart';
@@ -27,7 +27,24 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with AppActivityRouteAware<DashboardScreen> {
+  // Dashboard tabs share one Navigator route. RouteObserver alone cannot
+  // detect swipes or taps within the PageView.
+  static const List<String> _trackedTabs = [
+    'home',
+    'analytics',
+    'taxometer',
+    'top_movers',
+  ];
+
+  @override
+  String get activityScreenKey => _trackedTabs[_index];
+
+  void _reportVisibleTab() {
+    AppActivityService.instance.reportScreen(activityScreenKey);
+  }
+
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final List<Widget> _pages;
@@ -80,6 +97,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // Idempotent fallback for users whose main.dart has not initialized the
+      // optional tracking service. Never delay the visible dashboard.
+      AppActivityService.instance.initialize();
+      _reportVisibleTab();
       await NotificationService.openPendingSupportTicketIfPossible();
     });
   }
@@ -91,7 +113,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _selectTab(int value) {
     if (!mounted || value < 0 || value >= _pages.length) return;
 
-    if (_index == value) return;
+    if (_index == value) {
+      // The destination is already visible; repair a tracking session if the
+      // initial screen notification was missed during authentication.
+      _reportVisibleTab();
+      return;
+    }
+
+    // Report the requested tab immediately. onPageChanged reports it again
+    // when the transition completes (and also covers swipe navigation).
+    // AppActivityService de-duplicates repeated keys.
+    AppActivityService.instance.reportScreen(_trackedTabs[value]);
 
     // Keep bottom navigation, drawer navigation and swipe navigation in sync.
     // animateToPage gives a smooth transition when a tab is selected by tap.
@@ -103,12 +135,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     } else {
       setState(() => _index = value);
+      _reportVisibleTab();
     }
   }
 
   void _onPageChanged(int value) {
     if (!mounted || _index == value) return;
     setState(() => _index = value);
+    // Covers bottom-navigation taps, drawer navigation, AND horizontal swipes.
+    _reportVisibleTab();
   }
 
   @override
@@ -146,68 +181,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openWhatsNew() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-
-    final currentVersion = packageInfo.version.trim();
-    final currentBuild = packageInfo.buildNumber.trim();
-
-    if (!mounted) return;
-
-    // Show a small loading indicator while the latest backend release
-    // is fetched. This keeps the sidebar action responsive and ensures
-    // the page always opens with the newest API data.
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(color: AppColor.primary),
-      ),
-    );
-
-    final release = await WhatsNewService.fetchLatestRelease(
-      version: currentVersion,
-      build: currentBuild,
-    );
-
-    if (!mounted) return;
-
-    // Close loading dialog.
-    Navigator.of(context, rootNavigator: true).pop();
-
-    if (release == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to load What’s New. Please try again.'),
-        ),
-      );
-      return;
-    }
-
-    if (release.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No What’s New updates are available right now.'),
-        ),
-      );
-      return;
-    }
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => WhatsNewScreen(
-          release: release,
-          currentVersion: currentVersion,
-          currentBuild: currentBuild,
-          isLoggedIn: true,
-          manualMode: true,
-        ),
-      ),
-    );
+    // The sidebar always opens feature details, never replays the daily video.
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const WhatsNewFeatureHub()));
   }
 
-  void _closeDrawerThen(VoidCallback action) {
+  void _closeDrawerThen(VoidCallback action, {String? screenKey}) {
     Navigator.of(context).pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) => action());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Side-drawer navigation is not a new route for PageView tabs. For
+      // pushed screens, also report immediately; RouteAware will confirm the
+      // actual destination and restore the previous page on Back.
+      if (screenKey != null) {
+        AppActivityService.instance.reportScreen(screenKey);
+      }
+      action();
+    });
   }
 
   @override
@@ -390,7 +381,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
               child: InkWell(
                 borderRadius: BorderRadius.circular(22),
-                onTap: () => _closeDrawerThen(_openProfile),
+                onTap: () =>
+                    _closeDrawerThen(_openProfile, screenKey: 'profile'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
@@ -511,7 +503,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _drawerItem(
                     icon: Icons.account_balance_wallet_rounded,
                     label: 'Holdings',
-                    onTap: () => _closeDrawerThen(_openHoldings),
+                    onTap: () =>
+                        _closeDrawerThen(_openHoldings, screenKey: 'holdings'),
                   ),
                   _drawerItem(
                     icon: Icons.bar_chart_rounded,
@@ -538,12 +531,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _drawerItem(
                     icon: Icons.support_agent_rounded,
                     label: 'Support Messages',
-                    onTap: () => _closeDrawerThen(_openSupportMessages),
+                    onTap: () => _closeDrawerThen(
+                      _openSupportMessages,
+                      screenKey: 'support_messages',
+                    ),
                   ),
                   _drawerItem(
                     icon: Icons.new_releases_rounded,
                     label: 'What’s New',
-                    onTap: () => _closeDrawerThen(_openWhatsNew),
+                    onTap: () => _closeDrawerThen(
+                      _openWhatsNew,
+                      screenKey: 'whats_new_features',
+                    ),
                   ),
                 ],
               ),

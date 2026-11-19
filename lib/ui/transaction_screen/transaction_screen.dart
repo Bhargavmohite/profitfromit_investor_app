@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/transaction_response.dart';
 import 'package:profit_from_it_investors/provider/transaction_provider/transaction_provider.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +14,11 @@ class TransactionScreen extends StatefulWidget {
   State<TransactionScreen> createState() => _TransactionScreenState();
 }
 
-class _TransactionScreenState extends State<TransactionScreen> {
+class _TransactionScreenState extends State<TransactionScreen>
+    with AppActivityRouteAware<TransactionScreen> {
+  @override
+  String get activityScreenKey => 'transactions';
+
   String _activeFilter = 'All';
 
   @override
@@ -32,7 +37,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         title: Text(
           'Transactions',
-          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColor.textPrimary),
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColor.textPrimary,
+          ),
         ),
         centerTitle: false,
       ),
@@ -63,7 +72,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.only(top: 4, bottom: 8),
                           itemCount: items.length,
-                          itemBuilder: (_, index) => _TransactionTile(tx: items[index]),
+                          itemBuilder: (_, index) =>
+                              _TransactionTile(tx: items[index]),
                         ),
                 ),
 
@@ -76,7 +86,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  Widget _buildFilterSection(TransactionProvider provider, List<String> filterTypes) {
+  Widget _buildFilterSection(
+    TransactionProvider provider,
+    List<String> filterTypes,
+  ) {
     return Container(
       color: AppColor.white,
       child: Column(
@@ -96,7 +109,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 Color pillColor = AppColor.primary;
 
                 if (filter != 'All') {
-                  final tx = provider.transactions.firstWhere((e) => e.type == filter);
+                  final tx = provider.transactions.firstWhere(
+                    (e) => e.type == filter,
+                  );
 
                   pillColor = (tx.colorCode ?? tx.color).toColor();
                 }
@@ -111,10 +126,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(color: isSelected ? pillColor : pillColor.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? pillColor
+                          : pillColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                     child: Text(
                       filter,
-                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : pillColor),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white : pillColor,
+                      ),
                     ),
                   ),
                 );
@@ -153,7 +177,12 @@ class _TransactionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: dotColor,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: dotColor.withValues(alpha: 0.40), blurRadius: 6)],
+              boxShadow: [
+                BoxShadow(
+                  color: dotColor.withValues(alpha: 0.40),
+                  blurRadius: 6,
+                ),
+              ],
             ),
           ),
 
@@ -165,21 +194,38 @@ class _TransactionTile extends StatelessWidget {
               children: [
                 Text(
                   tx.type ?? '',
-                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: dotColor),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: dotColor,
+                  ),
                 ),
 
                 const SizedBox(height: 2),
 
                 Text(
                   tx.companyName ?? '',
-                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: AppColor.textPrimary),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColor.textPrimary,
+                  ),
                 ),
 
                 const SizedBox(height: 2),
 
-                Text(tx.displayText ?? '', style: GoogleFonts.poppins(fontSize: 12, color: AppColor.textSecondary)),
+                Text(
+                  tx.displayText ?? '',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColor.textSecondary,
+                  ),
+                ),
 
-                if ((tx.balanceQty ?? '0') != '0') ...[const SizedBox(height: 5), _BalanceChip(qty: tx.balanceQty ?? '0', color: dotColor)],
+                if ((tx.balanceQty ?? '0') != '0') ...[
+                  const SizedBox(height: 5),
+                  _BalanceChip(qty: tx.balanceQty ?? '0', color: dotColor),
+                ],
               ],
             ),
           ),
@@ -189,16 +235,32 @@ class _TransactionTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(tx.date ?? '', style: GoogleFonts.poppins(fontSize: 11, color: AppColor.textLight)),
+              Text(
+                tx.date ?? '',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: AppColor.textLight,
+                ),
+              ),
 
               const SizedBox(height: 6),
 
               amount > 0
                   ? Text(
                       '${tx.amount}',
-                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: dotColor),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: dotColor,
+                      ),
                     )
-                  : Text('—', style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textLight)),
+                  : Text(
+                      '—',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: AppColor.textLight,
+                      ),
+                    ),
             ],
           ),
         ],
@@ -217,10 +279,17 @@ class _BalanceChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Text(
         'Balance: $qty',
-        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+        style: GoogleFonts.poppins(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }
@@ -237,14 +306,25 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.receipt_long_outlined, size: 64, color: AppColor.textLight.withValues(alpha: 0.5)),
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 64,
+            color: AppColor.textLight.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 16),
           Text(
             filter == 'All' ? 'No transactions yet' : 'No $filter transactions',
-            style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColor.textSecondary),
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColor.textSecondary,
+            ),
           ),
           const SizedBox(height: 6),
-          Text('Your transaction history will appear here', style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textLight)),
+          Text(
+            'Your transaction history will appear here',
+            style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textLight),
+          ),
         ],
       ),
     );

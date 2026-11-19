@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/stock_detail_response.dart';
 import 'package:profit_from_it_investors/provider/stock_detail/stock_detail_provider.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +16,11 @@ class StockDetailScreen extends StatefulWidget {
   State<StockDetailScreen> createState() => _StockDetailScreenState();
 }
 
-class _StockDetailScreenState extends State<StockDetailScreen> {
+class _StockDetailScreenState extends State<StockDetailScreen>
+    with AppActivityRouteAware<StockDetailScreen> {
+  @override
+  String get activityScreenKey => 'stock_details';
+
   int _selectedTab = 0;
   static const List<String> _tabs = ['Overview', 'Transactions'];
   String _activeTransactionFilter = 'All';
@@ -24,12 +29,20 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<StockDetailProvider>().getStockDetail(context, stockId: widget.stockId, isRefresh: true);
+      context.read<StockDetailProvider>().getStockDetail(
+        context,
+        stockId: widget.stockId,
+        isRefresh: true,
+      );
     });
   }
 
   Future<void> _onRefresh() async {
-    await context.read<StockDetailProvider>().getStockDetail(context, stockId: widget.stockId, isRefresh: true);
+    await context.read<StockDetailProvider>().getStockDetail(
+      context,
+      stockId: widget.stockId,
+      isRefresh: true,
+    );
   }
 
   @override
@@ -70,7 +83,8 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             final StockDetailResponse? response = provider.stockDetailResponse;
             final Data? stockData = response?.data;
             final Summary? summary = stockData?.summary;
-            final double totalGainPercent = summary?.totalGain.toAmount() ?? 0.0;
+            final double totalGainPercent =
+                summary?.totalGain.toAmount() ?? 0.0;
             final bool isLoss = totalGainPercent < 0;
 
             return RefreshIndicator(
@@ -81,6 +95,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   children: [
                     // HEADER
                     Container(
+                      // Keep the header full-width even though the gain/CMP
+                      // Wrap now sizes to its contents. Without this, the
+                      // parent Column centres a narrow header on screen.
+                      width: double.infinity,
                       color: Colors.white,
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Column(
@@ -88,29 +106,78 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                         children: [
                           Text(
                             stockData!.companyName ?? "",
-                            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColor.textPrimary),
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColor.textPrimary,
+                            ),
                           ),
 
                           const SizedBox(height: 2),
 
-                          Text(stockData.isin ?? "", style: GoogleFonts.poppins(fontSize: 12, color: AppColor.textSecondary)),
+                          Text(
+                            stockData.isin ?? "",
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: AppColor.textSecondary,
+                            ),
+                          ),
 
                           const SizedBox(height: 12),
 
                           Text(
                             summary?.currentValue ?? "0",
-                            style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: AppColor.textPrimary),
+                            style: GoogleFonts.poppins(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: AppColor.textPrimary,
+                            ),
                           ),
 
                           const SizedBox(height: 4),
 
-                          Row(
+                          // Keep CMP immediately beside the displayed gain/loss,
+                          // with matching typography instead of right-aligning it.
+                          // Wrap onto a second line only on narrow screens.
+                          Wrap(
+                            spacing: 14,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Icon(isLoss ? Icons.arrow_drop_down : Icons.arrow_drop_up, color: isLoss ? AppColor.lossText : AppColor.gainText, size: 20),
-                              Text(
-                                summary?.totalGain ?? "0",
-                                /*(${totalGainPercent.abs().toStringAsFixed(2)}%)*/
-                                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: isLoss ? AppColor.lossText : AppColor.gainText),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isLoss
+                                        ? Icons.arrow_drop_down
+                                        : Icons.arrow_drop_up,
+                                    color: isLoss
+                                        ? AppColor.lossText
+                                        : AppColor.gainText,
+                                    size: 20,
+                                  ),
+                                  Text(
+                                    summary?.totalGain ?? '0',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: isLoss
+                                          ? AppColor.lossText
+                                          : AppColor.gainText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Tooltip(
+                                message: _cmpSourceLabel(summary?.cmpSource),
+                                child: Text(
+                                  'CMP: ${summary?.cmp ?? '—'}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColor.textPrimary,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -134,11 +201,26 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                                     margin: const EdgeInsets.only(right: 20),
                                     padding: const EdgeInsets.only(bottom: 10),
                                     decoration: BoxDecoration(
-                                      border: Border(bottom: BorderSide(color: sel ? AppColor.primary : Colors.transparent, width: 2.5)),
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: sel
+                                              ? AppColor.primary
+                                              : Colors.transparent,
+                                          width: 2.5,
+                                        ),
+                                      ),
                                     ),
                                     child: Text(
                                       _tabs[i],
-                                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: sel ? FontWeight.w600 : FontWeight.w400, color: sel ? AppColor.primary : AppColor.textSecondary),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: sel
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                        color: sel
+                                            ? AppColor.primary
+                                            : AppColor.textSecondary,
+                                      ),
                                     ),
                                   ),
                                 );
@@ -150,9 +232,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     ),
                     const SizedBox(height: 8),
                     // TAB CONTENT
-                    if (_selectedTab == 0) _buildOverview(summary, isLoss, totalGainPercent),
+                    if (_selectedTab == 0)
+                      _buildOverview(summary, isLoss, totalGainPercent),
 
-                    if (_selectedTab == 1) _buildTransactions(stockData.transactions ?? []),
+                    if (_selectedTab == 1)
+                      _buildTransactions(stockData.transactions ?? []),
                     const SizedBox(height: 100),
                   ],
                 ),
@@ -164,7 +248,24 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
-  Widget _buildOverview(Summary? summary, bool isLoss, double totalGainPercent) {
+  String _cmpSourceLabel(String? source) {
+    switch (source) {
+      case 'live':
+        return 'Live price';
+      case 'bhavcopy':
+        return 'Bhavcopy close';
+      case 'last_available':
+        return 'Last available';
+      default:
+        return 'Price unavailable';
+    }
+  }
+
+  Widget _buildOverview(
+    Summary? summary,
+    bool isLoss,
+    double totalGainPercent,
+  ) {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(20),
@@ -174,11 +275,17 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Average Buy Price', value: summary?.avgBuyPrice ?? "-"),
+          _InfoRow(
+            label: 'Average Buy Price',
+            value: summary?.avgBuyPrice ?? "-",
+          ),
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Invested Value', value: summary?.investedValue ?? "-"),
+          _InfoRow(
+            label: 'Invested Value',
+            value: summary?.investedValue ?? "-",
+          ),
 
           const Divider(height: 24),
 
@@ -186,23 +293,40 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Total Gain', value: summary?.totalGain ?? "-", valueColor: isLoss ? AppColor.lossText : AppColor.gainText),
+          _InfoRow(
+            label: 'Total Gain',
+            value: summary?.totalGain ?? "-",
+            valueColor: isLoss ? AppColor.lossText : AppColor.gainText,
+          ),
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'XIRR', value: summary?.xirr ?? "-", valueColor: AppColor.primary),
+          _InfoRow(
+            label: 'XIRR',
+            value: summary?.xirr ?? "-",
+            valueColor: AppColor.primary,
+          ),
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Total Holding Value', value: summary?.totalHoldingValue ?? "-"),
+          _InfoRow(
+            label: 'Total Holding Value',
+            value: summary?.totalHoldingValue ?? "-",
+          ),
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Total Buy Amount', value: summary?.totalBuyAmount ?? "-"),
+          _InfoRow(
+            label: 'Total Buy Amount',
+            value: summary?.totalBuyAmount ?? "-",
+          ),
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Total Sell Amount', value: summary?.totalSellAmount ?? "-"),
+          _InfoRow(
+            label: 'Total Sell Amount',
+            value: summary?.totalSellAmount ?? "-",
+          ),
 
           const Divider(height: 24),
 
@@ -210,7 +334,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
           const Divider(height: 24),
 
-          _InfoRow(label: 'Unrealised Gain', value: summary?.unrealisedGain ?? "-"),
+          _InfoRow(
+            label: 'Unrealised Gain',
+            value: summary?.unrealisedGain ?? "-",
+          ),
 
           const Divider(height: 24),
 
@@ -312,7 +439,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   Container(
                     width: 42,
                     height: 42,
-                    decoration: BoxDecoration(color: uiData.color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(
+                      color: uiData.color.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     child: Icon(uiData.icon, color: uiData.color),
                   ),
 
@@ -322,15 +452,33 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${uiData.title} • ${item.quantity ?? 0} Qty', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                        Text(
+                          '${uiData.title} • ${item.quantity ?? 0} Qty',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
 
                         const SizedBox(height: 4),
 
-                        Text(item.date ?? "", style: GoogleFonts.poppins(fontSize: 12, color: AppColor.textSecondary)),
+                        Text(
+                          item.date ?? "",
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppColor.textSecondary,
+                          ),
+                        ),
 
                         const SizedBox(height: 4),
 
-                        Text('Balance Qty: ${item.balanceQty ?? "-"}', style: GoogleFonts.poppins(fontSize: 11, color: AppColor.textLight)),
+                        Text(
+                          'Balance Qty: ${item.balanceQty ?? "-"}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: AppColor.textLight,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -338,15 +486,33 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(item.amount ?? "-", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(
+                        item.amount ?? "-",
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
 
                       const SizedBox(height: 4),
 
-                      Text(item.price ?? "0", style: GoogleFonts.poppins(fontSize: 12, color: AppColor.textSecondary)),
+                      Text(
+                        item.price ?? "0",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColor.textSecondary,
+                        ),
+                      ),
 
                       const SizedBox(height: 4),
 
-                      Text('Brokerage: ${item.brokerage ?? "0"}', style: GoogleFonts.poppins(fontSize: 11, color: AppColor.textLight)),
+                      Text(
+                        'Brokerage: ${item.brokerage ?? "0"}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: AppColor.textLight,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -363,7 +529,13 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       color: Colors.white,
       padding: const EdgeInsets.all(40),
       child: Center(
-        child: Text(title, style: GoogleFonts.poppins(fontSize: 14, color: AppColor.textSecondary)),
+        child: Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: AppColor.textSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -371,19 +543,39 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   TransactionUiData getTransactionUiData(String? action) {
     switch ((action ?? '').toUpperCase()) {
       case 'B':
-        return const TransactionUiData(icon: Icons.arrow_downward_rounded, color: AppColor.success, title: 'Buy');
+        return const TransactionUiData(
+          icon: Icons.arrow_downward_rounded,
+          color: AppColor.success,
+          title: 'Buy',
+        );
 
       case 'S':
-        return const TransactionUiData(icon: Icons.arrow_upward_rounded, color: AppColor.danger, title: 'Sell');
+        return const TransactionUiData(
+          icon: Icons.arrow_upward_rounded,
+          color: AppColor.danger,
+          title: 'Sell',
+        );
 
       case 'DIVIDEND':
-        return const TransactionUiData(icon: Icons.payments_rounded, color: Colors.orange, title: 'Dividend');
+        return const TransactionUiData(
+          icon: Icons.payments_rounded,
+          color: Colors.orange,
+          title: 'Dividend',
+        );
 
       case 'BONUS':
-        return const TransactionUiData(icon: Icons.card_giftcard_rounded, color: Colors.purple, title: 'Bonus');
+        return const TransactionUiData(
+          icon: Icons.card_giftcard_rounded,
+          color: Colors.purple,
+          title: 'Bonus',
+        );
 
       default:
-        return const TransactionUiData(icon: Icons.swap_horiz_rounded, color: Colors.blueGrey, title: 'Transaction');
+        return const TransactionUiData(
+          icon: Icons.swap_horiz_rounded,
+          color: Colors.blueGrey,
+          title: 'Transaction',
+        );
     }
   }
 
@@ -430,7 +622,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     }).toList();
   }
 
-  Widget _buildTransactionFilter(List<String> filters, List<Transaction> transactions) {
+  Widget _buildTransactionFilter(
+    List<String> filters,
+    List<Transaction> transactions,
+  ) {
     return Container(
       color: AppColor.white,
       child: Column(
@@ -451,7 +646,13 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 Color color = AppColor.primary;
 
                 if (filter != 'All') {
-                  color = getTransactionUiData(transactions.firstWhere((e) => _getTransactionType(e.action) == filter).action).color;
+                  color = getTransactionUiData(
+                    transactions
+                        .firstWhere(
+                          (e) => _getTransactionType(e.action) == filter,
+                        )
+                        .action,
+                  ).color;
                 }
 
                 return GestureDetector(
@@ -464,10 +665,17 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     duration: const Duration(milliseconds: 200),
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(horizontal: 18),
-                    decoration: BoxDecoration(color: isSelected ? color : color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
+                    decoration: BoxDecoration(
+                      color: isSelected ? color : color.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                     child: Text(
                       filter,
-                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : color),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white : color,
+                      ),
                     ),
                   ),
                 );
@@ -487,7 +695,11 @@ class TransactionUiData {
   final Color color;
   final String title;
 
-  const TransactionUiData({required this.icon, required this.color, required this.title});
+  const TransactionUiData({
+    required this.icon,
+    required this.color,
+    required this.title,
+  });
 }
 
 class _InfoRow extends StatelessWidget {
@@ -504,7 +716,13 @@ class _InfoRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(label, style: GoogleFonts.poppins(fontSize: 13, color: AppColor.textSecondary)),
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: AppColor.textSecondary,
+            ),
+          ),
         ),
 
         const SizedBox(width: 16),
@@ -513,7 +731,11 @@ class _InfoRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? AppColor.textPrimary),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? AppColor.textPrimary,
+            ),
           ),
         ),
       ],

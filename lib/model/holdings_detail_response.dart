@@ -141,6 +141,7 @@ class Data {
 class Holding {
   String? id;
   String? assetName;
+  String? nseSymbol;
 
   double? netQuantity;
 
@@ -153,6 +154,7 @@ class Holding {
   Holding({
     this.id,
     this.assetName,
+    this.nseSymbol,
     this.netQuantity,
     this.investedValue,
     this.currentValue,
@@ -165,6 +167,7 @@ factory Holding.fromJson(Map<String, dynamic> json) => Holding(
     id: json["id"]?.toString(),
 
     assetName: json["asset_name"]?.toString(),
+    nseSymbol: (json["nse_symbol"] ?? json["nse_id"] ?? json["symbol"])?.toString(),
 
     netQuantity: double.tryParse(json["net_quantity"]?.toString() ?? "0") ?? 0.0,
 
@@ -182,6 +185,7 @@ factory Holding.fromJson(Map<String, dynamic> json) => Holding(
   Map<String, dynamic> toJson() => {
     "id": id,
     "asset_name": assetName,
+    "nse_symbol": nseSymbol,
     "net_quantity": netQuantity,
     "invested_value": investedValue,
     "current_value": currentValue,

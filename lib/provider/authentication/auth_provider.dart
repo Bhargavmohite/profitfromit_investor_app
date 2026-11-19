@@ -8,6 +8,7 @@ import 'package:profit_from_it_investors/model/login_response.dart';
 import 'package:profit_from_it_investors/model/otp_verification_response.dart';
 import 'package:profit_from_it_investors/model/send_otp_response.dart';
 import 'package:profit_from_it_investors/network/http_request.dart';
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:profit_from_it_investors/utility/constant.dart';
@@ -227,6 +228,7 @@ class AuthProvider extends ChangeNotifier {
         await LocalStorage.saveAccessToken(verifiedToken);
 
         SessionManager.changeUser(verifiedUserId);
+        AppActivityService.instance.onAuthenticated();
 
         // Link this phone's FCM token to the authenticated investor.
         await NotificationService.registerCurrentToken();

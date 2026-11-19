@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
 import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/provider/client_switch/client_switch_provider.dart';
 import 'package:profit_from_it_investors/model/holdings_detail_response.dart';
@@ -9,6 +10,7 @@ import 'package:profit_from_it_investors/ui/holdings_screen/holdings_sort_bottom
 import 'package:profit_from_it_investors/ui/authentication/profile_screen/profile_screen.dart';
 import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
@@ -31,7 +33,11 @@ class HoldingsScreen extends StatefulWidget {
   State<HoldingsScreen> createState() => _HoldingsScreenState();
 }
 
-class _HoldingsScreenState extends State<HoldingsScreen> {
+class _HoldingsScreenState extends State<HoldingsScreen>
+    with AppActivityRouteAware<HoldingsScreen> {
+  @override
+  String get activityScreenKey => 'holdings';
+
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
@@ -74,9 +80,15 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
     ).push(MaterialPageRoute(builder: (_) => const SupportMessagesScreen()));
   }
 
-  void _closeDrawerThen(VoidCallback action) {
+  void _closeDrawerThen(VoidCallback action, {String? screenKey}) {
     Navigator.of(context).pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) => action());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (screenKey != null) {
+        AppActivityService.instance.reportScreen(screenKey);
+      }
+      action();
+    });
   }
 
   void _returnToDashboard(VoidCallback? selectTab) {
@@ -229,8 +241,10 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
           } else {
             filteredHoldings = holdings.where((holding) {
               final name = (holding.assetName ?? '').toLowerCase();
+              final nseSymbol = (holding.nseSymbol ?? '').toLowerCase();
 
-              return name.contains(searchQuery);
+              return name.contains(searchQuery) ||
+                  nseSymbol.contains(searchQuery);
             }).toList();
           }
 
@@ -355,7 +369,8 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
               child: InkWell(
                 borderRadius: BorderRadius.circular(22),
-                onTap: () => _closeDrawerThen(_openProfile),
+                onTap: () =>
+                    _closeDrawerThen(_openProfile, screenKey: 'profile'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
@@ -508,7 +523,10 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                   _drawerItem(
                     icon: Icons.support_agent_rounded,
                     label: 'Support Messages',
-                    onTap: () => _closeDrawerThen(_openSupportMessages),
+                    onTap: () => _closeDrawerThen(
+                      _openSupportMessages,
+                      screenKey: 'support_messages',
+                    ),
                   ),
                 ],
               ),
@@ -727,6 +745,8 @@ class _HoldingTile extends StatelessWidget {
         : const Color(0xFFE53935);
 
     final assetName = (holding.assetName ?? '').trim();
+    final nseSymbol = (holding.nseSymbol ?? '').trim();
+    final displayName = nseSymbol.isNotEmpty ? nseSymbol : assetName;
     final initials = getInitials(assetName);
 
     return InkWell(
@@ -750,7 +770,7 @@ class _HoldingTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Company name + overall gain/loss percentage
+            // NSE trading symbol + overall gain/loss percentage
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -783,8 +803,8 @@ class _HoldingTile extends StatelessWidget {
 
                 Expanded(
                   child: Text(
-                    assetName,
-                    maxLines: 2,
+                    displayName,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
                       fontSize: 12,

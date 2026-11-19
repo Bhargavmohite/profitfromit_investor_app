@@ -1,4 +1,6 @@
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
 import 'dart:async';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +10,16 @@ import 'package:profit_from_it_investors/model/whats_new_response.dart';
 import 'package:profit_from_it_investors/network/whats_new_service.dart';
 import 'package:profit_from_it_investors/ui/authentication/login_screen/login_screen.dart';
 import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new_story/whats_new_story_gate.dart';
 import 'package:profit_from_it_investors/ui/notifications/notifications_screen.dart';
+import 'package:profit_from_it_investors/ui/analytics_screen/analytics_screen.dart';
+import 'package:profit_from_it_investors/ui/authentication/profile_screen/profile_screen.dart';
+import 'package:profit_from_it_investors/ui/dividend/dividend_screen.dart';
+import 'package:profit_from_it_investors/ui/holdings_screen/holdings_screen.dart';
+import 'package:profit_from_it_investors/ui/net_contribution/net_contribution_screen.dart';
+import 'package:profit_from_it_investors/ui/taxometer_screen/taxometer_screen.dart';
+import 'package:profit_from_it_investors/ui/transaction_screen/transaction_screen.dart';
+import 'package:profit_from_it_investors/ui/watchlist_screen/watchlist_screen.dart';
 import 'package:profit_from_it_investors/ui/support_messages/support_messages_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 
@@ -18,6 +29,7 @@ class WhatsNewScreen extends StatefulWidget {
   final String currentBuild;
   final bool isLoggedIn;
   final bool manualMode;
+  final bool exitToDashboard;
 
   const WhatsNewScreen({
     super.key,
@@ -26,6 +38,7 @@ class WhatsNewScreen extends StatefulWidget {
     required this.currentBuild,
     required this.isLoggedIn,
     this.manualMode = false,
+    this.exitToDashboard = false,
   });
 
   @override
@@ -33,7 +46,10 @@ class WhatsNewScreen extends StatefulWidget {
 }
 
 class _WhatsNewScreenState extends State<WhatsNewScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, AppActivityRouteAware<WhatsNewScreen> {
+  @override
+  String get activityScreenKey => 'whats_new_release';
+
   bool _isContinuing = false;
   bool _isRefreshing = false;
   Timer? _refreshTimer;
@@ -104,7 +120,7 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => widget.isLoggedIn
-                ? const DashboardScreen()
+                ? const WhatsNewStoryGate()
                 : const LoginScreen(),
           ),
           (route) => false,
@@ -151,7 +167,14 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     if (_isContinuing) return;
 
     if (widget.manualMode) {
-      Navigator.of(context).pop();
+      if (widget.exitToDashboard) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          (_) => false,
+        );
+      } else {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
@@ -169,7 +192,7 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) =>
-            widget.isLoggedIn ? const DashboardScreen() : const LoginScreen(),
+            widget.isLoggedIn ? const WhatsNewStoryGate() : const LoginScreen(),
       ),
       (route) => false,
     );
@@ -181,7 +204,7 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     if (path.isEmpty) return;
 
     // Full web URL supplied by backend.
-    if (path.startsWith('https://') || path.startsWith('http://')) {
+    if (path.startsWith('https://')) {
       final uri = Uri.tryParse(path);
 
       if (uri == null) {
@@ -211,6 +234,7 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     }
 
     Widget? destination;
+    String? inlineTabScreen;
 
     switch (path.toLowerCase()) {
       case 'support_messages':
@@ -230,6 +254,64 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
       case '/home':
         destination = const DashboardScreen();
         break;
+
+      // Approved in-app destinations. New backend explore_path values
+      // must be mapped here; never interpret backend text as a route name.
+      case 'holdings':
+      case '/holdings':
+      case 'portfolio':
+      case '/portfolio':
+        destination = const HoldingsScreen();
+        break;
+
+      case 'analytics':
+      case '/analytics':
+        inlineTabScreen = 'analytics';
+        destination = AnalyticsScreen(
+          onOpenMenu: () => Navigator.of(context).pop(),
+        );
+        break;
+
+      case 'taxometer':
+      case '/taxometer':
+        inlineTabScreen = 'taxometer';
+        destination = TaxometerScreen(
+          onOpenMenu: () => Navigator.of(context).pop(),
+        );
+        break;
+
+      case 'movers':
+      case '/movers':
+      case 'market_movers':
+      case 'watchlist':
+      case '/watchlist':
+        inlineTabScreen = 'top_movers';
+        destination = WatchlistScreen(
+          onOpenMenu: () => Navigator.of(context).pop(),
+        );
+        break;
+
+      case 'profile':
+      case '/profile':
+        destination = const ProfileScreen();
+        break;
+
+      case 'dividend':
+      case 'dividends':
+      case '/dividends':
+        destination = const DividendScreen();
+        break;
+
+      case 'transactions':
+      case '/transactions':
+        destination = const TransactionScreen();
+        break;
+
+      case 'net_contribution':
+      case 'net-contribution':
+      case '/net-contribution':
+        destination = const NetContributionScreen();
+        break;
     }
 
     if (destination == null) {
@@ -238,6 +320,13 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     }
 
     if (!mounted) return;
+
+    // Analytics, Taxometer and Movers can also be opened as standalone
+    // screens from release notes. They are PageView children elsewhere,
+    // so track these standalone opens here rather than at widget init.
+    if (inlineTabScreen != null) {
+      AppActivityService.instance.reportScreen(inlineTabScreen);
+    }
 
     await Navigator.of(
       context,
@@ -257,7 +346,12 @@ class _WhatsNewScreenState extends State<WhatsNewScreen>
     final updates = _release.items;
 
     return PopScope(
-      canPop: widget.manualMode,
+      canPop: widget.manualMode && !widget.exitToDashboard,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && widget.manualMode && widget.exitToDashboard) {
+          _continueToApp();
+        }
+      },
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FB),
         body: SafeArea(
@@ -583,12 +677,19 @@ class _UpdateCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: Text(
-                        'Explore',
-                        style: GoogleFonts.poppins(
-                          fontSize: 9.7,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Open Feature',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10.2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          const Icon(Icons.arrow_forward_rounded, size: 16),
+                        ],
                       ),
                     ),
                   ),

@@ -279,7 +279,6 @@ class _MoverTile extends StatelessWidget {
         : const Color(0xFFE53935);
 
     final String company = (item.company ?? '').trim();
-    final String cmp = _formatMoney(item.cmp);
     final String avgCost = _formatMoney(item.avgCost);
 
     return Container(
@@ -299,7 +298,7 @@ class _MoverTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: initials, company, CMP and % movement.
+          // Top row: initials and company; percentage appears only below.
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -342,57 +341,6 @@ class _MoverTile extends StatelessWidget {
                     height: 1.15,
                   ),
                 ),
-              ),
-
-              const SizedBox(width: 8),
-
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    cmp,
-                    maxLines: 1,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColor.textPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 3),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: movementColor.withValues(alpha: .10),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isPositive
-                              ? Icons.arrow_drop_up_rounded
-                              : Icons.arrow_drop_down_rounded,
-                          size: 13,
-                          color: movementColor,
-                        ),
-                        Text(
-                          '${percentValue.abs().toStringAsFixed(2)}%',
-                          style: GoogleFonts.poppins(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w700,
-                            color: movementColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

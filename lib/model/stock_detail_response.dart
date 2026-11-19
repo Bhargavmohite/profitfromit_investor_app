@@ -1,25 +1,24 @@
 import 'dart:convert';
 
-StockDetailResponse stockDetailResponseFromJson(String str) => StockDetailResponse.fromJson(json.decode(str));
+StockDetailResponse stockDetailResponseFromJson(String str) =>
+    StockDetailResponse.fromJson(json.decode(str));
 
-String stockDetailResponseToJson(StockDetailResponse data) => json.encode(data.toJson());
+String stockDetailResponseToJson(StockDetailResponse data) =>
+    json.encode(data.toJson());
 
 class StockDetailResponse {
   int? status;
   String? message;
   Data? data;
 
-  StockDetailResponse({
-    this.status,
-    this.message,
-    this.data,
-  });
+  StockDetailResponse({this.status, this.message, this.data});
 
-  factory StockDetailResponse.fromJson(Map<String, dynamic> json) => StockDetailResponse(
-    status: json["status"],
-    message: json["message"],
-    data: json["data"] == null ? null : Data.fromJson(json["data"]),
-  );
+  factory StockDetailResponse.fromJson(Map<String, dynamic> json) =>
+      StockDetailResponse(
+        status: json["status"],
+        message: json["message"],
+        data: json["data"] == null ? null : Data.fromJson(json["data"]),
+      );
 
   Map<String, dynamic> toJson() => {
     "status": status,
@@ -34,31 +33,34 @@ class Data {
   Summary? summary;
   List<Transaction>? transactions;
 
-  Data({
-    this.companyName,
-    this.isin,
-    this.summary,
-    this.transactions,
-  });
+  Data({this.companyName, this.isin, this.summary, this.transactions});
 
   factory Data.fromJson(Map<String, dynamic> json) => Data(
     companyName: json["company_name"],
     isin: json["isin"],
     summary: json["summary"] == null ? null : Summary.fromJson(json["summary"]),
-    transactions: json["transactions"] == null ? [] : List<Transaction>.from(json["transactions"]!.map((x) => Transaction.fromJson(x))),
+    transactions: json["transactions"] == null
+        ? []
+        : List<Transaction>.from(
+            json["transactions"]!.map((x) => Transaction.fromJson(x)),
+          ),
   );
 
   Map<String, dynamic> toJson() => {
     "company_name": companyName,
     "isin": isin,
     "summary": summary?.toJson(),
-    "transactions": transactions == null ? [] : List<dynamic>.from(transactions!.map((x) => x.toJson())),
+    "transactions": transactions == null
+        ? []
+        : List<dynamic>.from(transactions!.map((x) => x.toJson())),
   };
 }
 
 class Summary {
   String? holdingQty;
   String? avgBuyPrice;
+  String? cmp;
+  String? cmpSource;
   String? investedValue;
   String? currentValue;
   String? totalGain;
@@ -75,6 +77,8 @@ class Summary {
   Summary({
     this.holdingQty,
     this.avgBuyPrice,
+    this.cmp,
+    this.cmpSource,
     this.investedValue,
     this.currentValue,
     this.totalGain,
@@ -92,6 +96,8 @@ class Summary {
   factory Summary.fromJson(Map<String, dynamic> json) => Summary(
     holdingQty: json["holding_qty"],
     avgBuyPrice: json["avg_buy_price"],
+    cmp: json["cmp"],
+    cmpSource: json["cmp_source"],
     investedValue: json["invested_value"],
     currentValue: json["current_value"],
     totalGain: json["total_gain"],
@@ -109,6 +115,8 @@ class Summary {
   Map<String, dynamic> toJson() => {
     "holding_qty": holdingQty,
     "avg_buy_price": avgBuyPrice,
+    "cmp": cmp,
+    "cmp_source": cmpSource,
     "invested_value": investedValue,
     "current_value": currentValue,
     "total_gain": totalGain,

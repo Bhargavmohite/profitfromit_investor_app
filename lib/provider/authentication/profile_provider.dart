@@ -15,6 +15,7 @@ import 'package:path/path.dart' as path;
 import 'package:profit_from_it_investors/utility/local_storage.dart';
 import 'package:profit_from_it_investors/utility/session_manager.dart';
 import 'package:provider/provider.dart';
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
 
 class ProfileProvider extends ChangeNotifier {
   bool _loginLoading = false;
@@ -332,6 +333,7 @@ class ProfileProvider extends ChangeNotifier {
       LogoutResponse loginResponse = logoutResponseFromJson(response.body);
       if (loginResponse.status == 200) {
         await SessionManager.resetToLoggedInUser();
+        AppActivityService.instance.onLoggedOut();
         LocalStorage.clearAll();
         showSuccess(loginResponse.message.toString());
         nextRoute(
@@ -371,6 +373,7 @@ class ProfileProvider extends ChangeNotifier {
       LogoutResponse loginResponse = logoutResponseFromJson(response.body);
       if (loginResponse.status == 200) {
         await SessionManager.resetToLoggedInUser();
+        AppActivityService.instance.onLoggedOut();
         LocalStorage.clearAll();
         showSuccess(loginResponse.message.toString());
         nextRoute(

@@ -2,7 +2,7 @@ name: profit_from_it_investors
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.2.0+13
+version: 1.2.1+13
 
 
 environment:
@@ -47,6 +47,7 @@ dependencies:
   file_saver: ^0.6.0
   file_picker: ^11.0.3
   webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
   vimeo_video_player: ^1.0.3
 dev_dependencies:
   flutter_test:

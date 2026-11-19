@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:profit_from_it_investors/model/dividend_response.dart';
 import 'package:profit_from_it_investors/provider/dividend_provider/dividend_provider.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:provider/provider.dart';
 
@@ -16,7 +17,11 @@ class DividendScreen extends StatefulWidget {
   State<DividendScreen> createState() => _DividendScreenState();
 }
 
-class _DividendScreenState extends State<DividendScreen> {
+class _DividendScreenState extends State<DividendScreen>
+    with AppActivityRouteAware<DividendScreen> {
+  @override
+  String get activityScreenKey => 'dividends';
+
   bool _isExporting = false;
 
   Future<void> _exportDividendExcel({DateTimeRange? dateRange}) async {

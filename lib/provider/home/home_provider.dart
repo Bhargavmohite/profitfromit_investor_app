@@ -54,6 +54,7 @@ class HomeProvider extends ChangeNotifier {
   Future<bool> getDashboard(
     BuildContext context, {
     bool isRefresh = false,
+    bool silentErrors = false,
   }) async {
     final int requestVersion = ++_dashboardRequestVersion;
     final String requestedUserId = SessionManager.userId;
@@ -147,7 +148,9 @@ class HomeProvider extends ChangeNotifier {
         return true;
       }
 
-      showError(parsedDashboardResponse.message ?? "Something went wrong");
+      if (!silentErrors) {
+        showError(parsedDashboardResponse.message ?? "Something went wrong");
+      }
       return false;
     } catch (e) {
       // Ignore errors from a request that became obsolete because another
@@ -165,10 +168,12 @@ class HomeProvider extends ChangeNotifier {
         '[HOME ERROR] DASHBOARD ========> ${e.runtimeType}: ${e.toString()}',
       );
 
-      if (e is SocketException) {
-        showError("No internet connection. Please check your network.");
-      } else {
-        showError("Something went wrong. Please try again.");
+      if (!silentErrors) {
+        if (e is SocketException) {
+          showError("No internet connection. Please check your network.");
+        } else {
+          showError("Something went wrong. Please try again.");
+        }
       }
       return false;
     } finally {

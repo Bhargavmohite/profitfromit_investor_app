@@ -11,6 +11,7 @@ import 'package:profit_from_it_investors/provider/family/family_provider.dart';
 import 'package:profit_from_it_investors/provider/home/home_provider.dart';
 import 'package:profit_from_it_investors/provider/notification_provider/notification_provider.dart';
 import 'package:profit_from_it_investors/ui/stock_detail_screen/stock_detail_screen.dart';
+import 'package:profit_from_it_investors/ui/todays_gain_loss/todays_gain_loss_screen.dart';
 import 'package:profit_from_it_investors/ui/net_contribution/net_contribution_screen.dart';
 import 'package:profit_from_it_investors/ui/notifications/notifications_screen.dart';
 import 'package:profit_from_it_investors/ui/dividend/dividend_screen.dart';
@@ -2811,6 +2812,7 @@ class _PortfolioCardState extends State<_PortfolioCard> {
           required String amount,
           required bool isGain,
           String? percentage,
+          bool showDetails = false,
         }) {
           final valueColor = isGain ? mint : lossRed;
 
@@ -2827,15 +2829,27 @@ class _PortfolioCardState extends State<_PortfolioCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    color: softText,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          color: softText,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    if (showDetails)
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: softText,
+                        size: 10,
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 5),
                 Row(
@@ -3096,13 +3110,25 @@ class _PortfolioCardState extends State<_PortfolioCard> {
               Row(
                 children: [
                   Expanded(
-                    child: gainPanel(
-                      title: "Today's Gain/Loss",
-                      amount: todayAmount,
-                      isGain: isTodayGain,
-                      percentage:
-                          "${(dashboard?.todaysGainLossPercentage ?? 0) >= 0 ? '+' : ''}"
-                          "${(dashboard?.todaysGainLossPercentage ?? 0).toStringAsFixed(2)}%",
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TodaysGainLossScreen(),
+                          ),
+                        ),
+                        child: gainPanel(
+                          title: "Today's Gain/Loss",
+                          showDetails: true,
+                          amount: todayAmount,
+                          isGain: isTodayGain,
+                          percentage:
+                              "${(dashboard?.todaysGainLossPercentage ?? 0) >= 0 ? '+' : ''}"
+                              "${(dashboard?.todaysGainLossPercentage ?? 0).toStringAsFixed(2)}%",
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 9),

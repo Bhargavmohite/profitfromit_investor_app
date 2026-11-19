@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:profit_from_it_investors/model/profile_response.dart';
 import 'package:profit_from_it_investors/provider/authentication/profile_provider.dart';
 import 'package:profit_from_it_investors/ui/transaction_screen/transaction_screen.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 import 'package:provider/provider.dart';
@@ -18,7 +19,11 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with AppActivityRouteAware<ProfileScreen> {
+  @override
+  String get activityScreenKey => 'profile';
+
   bool _personalExpanded = true;
   bool _kycExpanded = false;
   bool _bankExpanded = true;

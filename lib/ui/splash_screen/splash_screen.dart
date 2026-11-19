@@ -2,12 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:profit_from_it_investors/provider/authentication/user_provider.dart';
 import 'package:profit_from_it_investors/network/whats_new_service.dart';
 import 'package:profit_from_it_investors/provider/app_update_provider/app_update_provider.dart';
 import 'package:profit_from_it_investors/ui/app_update/app_update_prompt.dart';
 import 'package:profit_from_it_investors/ui/authentication/login_screen/login_screen.dart';
-import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new_story/whats_new_story_gate.dart';
 import 'package:profit_from_it_investors/ui/whats_new/whats_new_screen.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/app_images.dart';
@@ -111,8 +110,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigateUser() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-
     final appUpdateProvider = Provider.of<AppUpdateProvider>(
       context,
       listen: false,
@@ -184,12 +181,8 @@ class _SplashScreenState extends State<SplashScreen>
     // Normal authentication flow
     // ---------------------------------------------------------------
     if (isVerifiedLogin) {
-      await userProvider.loadUserInfo();
-
-      if (!mounted) return;
-
       nextRoute(
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(builder: (context) => const WhatsNewStoryGate()),
         isClearBackRoutes: true,
       );
     } else {

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:profit_from_it_investors/model/app_notification_response.dart';
 import 'package:profit_from_it_investors/provider/notification_provider/notification_provider.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:provider/provider.dart';
 
@@ -13,7 +14,11 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with AppActivityRouteAware<NotificationsScreen> {
+  @override
+  String get activityScreenKey => 'notifications';
+
   final Set<int> _selectedIds = <int>{};
 
   bool get _isSelectionMode => _selectedIds.isNotEmpty;

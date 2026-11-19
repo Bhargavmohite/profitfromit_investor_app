@@ -1,6 +1,8 @@
 // ignore_for_file: unused_import
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:profit_from_it_investors/network/app_activity_service.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -48,6 +50,8 @@ Future<void> main() async {
   tz.initializeTimeZones();
 
   await SessionManager.initialize();
+  // Track an already-signed-in user on cold launch; never block navigation.
+  AppActivityService.instance.initialize();
 
   runApp(
     MultiProvider(
@@ -87,6 +91,8 @@ class MyApp extends StatelessWidget {
         scaffoldMessengerKey: rootScaffoldMessengerKey,
         title: Constants.appName,
         navigatorKey: navigatorKey,
+        // Required for pushed-screen tracking and restoring the previous screen.
+        navigatorObservers: [appActivityRouteObserver],
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: SplashScreen(),

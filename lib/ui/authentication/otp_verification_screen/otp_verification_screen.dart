@@ -3,7 +3,7 @@ import 'package:flutter_otp_text_field/flutter_otp_text_field.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:profit_from_it_investors/provider/authentication/auth_provider.dart';
-import 'package:profit_from_it_investors/ui/dashboard_screen/dashboard_screen.dart';
+import 'package:profit_from_it_investors/ui/whats_new_story/whats_new_story_gate.dart';
 import 'package:profit_from_it_investors/utility/common.dart';
 
 import 'package:provider/provider.dart';
@@ -346,7 +346,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       nextRoute(
         MaterialPageRoute(
           builder: (context) {
-            return DashboardScreen();
+            return const WhatsNewStoryGate();
           },
         ),
         isClearBackRoutes: true,

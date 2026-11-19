@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:profit_from_it_investors/network/http_request.dart';
 import 'package:profit_from_it_investors/utility/constant.dart';
+import 'package:profit_from_it_investors/utility/app_activity_route_aware.dart';
 import 'package:profit_from_it_investors/utility/app_color.dart';
 import 'package:profit_from_it_investors/utility/notification_service.dart';
 
@@ -134,7 +135,11 @@ class SupportMessagesScreen extends StatefulWidget {
   State<SupportMessagesScreen> createState() => _SupportMessagesScreenState();
 }
 
-class _SupportMessagesScreenState extends State<SupportMessagesScreen> {
+class _SupportMessagesScreenState extends State<SupportMessagesScreen>
+    with AppActivityRouteAware<SupportMessagesScreen> {
+  @override
+  String get activityScreenKey => 'support_messages';
+
   static const int _dailyTicketLimit = 3;
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -1672,7 +1677,11 @@ class _SupportTicketConversationScreen extends StatefulWidget {
 }
 
 class _SupportTicketConversationScreenState
-    extends State<_SupportTicketConversationScreen> {
+    extends State<_SupportTicketConversationScreen>
+    with AppActivityRouteAware<_SupportTicketConversationScreen> {
+  @override
+  String get activityScreenKey => 'support_ticket';
+
   final TextEditingController _replyController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
